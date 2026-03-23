@@ -21,6 +21,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ESTA ES LA RUTA QUE DEBES USAR PARA VER LOS RESULTADOS CORREGIDOS
     // URL: tu-dominio.com/resultados
     Route::get('/resultados', [ResultadoController::class, 'index'])->name('resultados.index');
+
+    // Detalle de votos por candidato (La que acabamos de agregar)
+    Route::get('/resultados/detalle/{candidato}', [ResultadoController::class, 'detalle'])->name('resultados.detalle');
     
     // El Dashboard sigue igual
     Route::get('/dashboard', [TerritorioController::class, 'dashboard'])->name('dashboard');

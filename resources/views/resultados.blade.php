@@ -1,7 +1,9 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Resultados') }} - {{ $dignidadSeleccionada ?? 'Sin Selección' }}
+           
+            {{-- Línea 4 original con protección extra --}}
+                {{ __('Resultados') }} - {{ is_array($dignidadSeleccionada) ? 'Cargando...' : ($dignidadSeleccionada ?? 'Sin Selección') }}
         </h2>
     </x-slot>
 
@@ -30,7 +32,7 @@
                 <form action="{{ route('resultados.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <input type="hidden" name="dignidad" value="{{ $dignidadSeleccionada }}">
                     
-                    {{-- Filtro de Cantón: Ahora visible siempre para Admin General y Provincial --}}
+                    {{-- Filtro de Cantón --}}
                     @if(Auth::user()->esAdminGeneral() || Auth::user()->role === 'admin_provincial')
                         <select name="canton_id" onchange="this.form.submit()" class="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500">
                             <option value="">
@@ -44,7 +46,7 @@
                         </select>
                     @endif
 
-                    {{-- Filtro de Parroquia: Ahora visible también para Prefecto --}}
+                    {{-- Filtro de Parroquia --}}
                     @if(!Auth::user()->esAdminParroquial())
                         <select name="parroquia_id" onchange="this.form.submit()" class="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500">
                             <option value="">Todas las Parroquias</option>
@@ -85,15 +87,19 @@
                         <tr>
                             <th class="px-6 py-3">Candidato</th>
                             <th class="px-6 py-3">Partido / Alianza</th>
-                            <th class="px-6 py-3 text-right">Votos Reales</th>
+                            <th class="px-6 py-3 text-right">Votos</th>
                             <th class="px-6 py-3 text-right">% Participación</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @forelse($resultados as $candidato)
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                <td class="px-6 py-4 font-bold text-gray-900 dark:text-white">
-                                    {{ $candidato->nombre }}
+                                {{-- Celda de Candidato con Enlace a Detalle --}}
+                                <td class="px-6 py-4 font-bold">
+                                    <a href="{{ route('resultados.detalle', $candidato->id) }}" class="text-blue-600 dark:text-blue-400 hover:underline flex flex-col">
+                                        <span>{{ $candidato->nombre }}</span>
+                                        <span class="text-[10px] font-normal text-gray-400 italic">Ver desglose por mesas</span>
+                                    </a>
                                 </td>
                                 <td class="px-6 py-4 text-xs">
                                     {{ $candidato->partido->nombre ?? 'Independiente' }}

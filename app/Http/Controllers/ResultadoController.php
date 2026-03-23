@@ -8,6 +8,8 @@ use App\Models\JurisdiccionConfig;
 use App\Models\Canton; 
 use App\Models\Parroquia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Request as RequestFacade;
+use Illuminate\Support\Facades\DB; // Añadido para consultas complejas
 use Illuminate\Http\Request; 
 
 class ResultadoController extends Controller
@@ -20,38 +22,26 @@ class ResultadoController extends Controller
         $config = JurisdiccionConfig::where('canton_id', $user->canton_id)->first();
         $pestanasVisibles = $this->obtenerPestanasVisibles($user, $config);
 
-        // 2. Garantizar valor para la dignidad (Rescate automático)
+       // 2. Garantizar valor para la dignidad (Rescate automático)
         $dignidadSeleccionada = $request->get('dignidad');
+
         if (!$dignidadSeleccionada || !in_array($dignidadSeleccionada, $pestanasVisibles)) {
-            $dignidadSeleccionada = !empty($pestanasVisibles) ? $pestanasVisibles : 'Alcalde';
+            // Forzamos la obtención del primer elemento como string
+            $valorPorDefecto = !empty($pestanasVisibles) ? reset($pestanasVisibles) : 'Alcalde';
+            $dignidadSeleccionada = is_array($valorPorDefecto) ? 'Alcalde' : $valorPorDefecto;
         }
 
         // 3. Definir Jurisdicción de consulta
         $cantonFiltro = $request->get('canton_id');
         $parroquiaFiltro = $request->get('parroquia_id');
 
-        // Lógica de jerarquía de filtros por Rol: 
-        // Si es Admin General o Provincial, el filtro manual manda. 
         if ($user->esAdminGeneral() || $user->role === 'admin_provincial') {
             $finalCantonId = $cantonFiltro;
         } else {
             $finalCantonId = $user->canton_id;
         }
 
-        // El filtro de parroquia siempre es el del request, a menos que sea Admin Parroquial (fijo)
         $finalParroquiaId = $user->esAdminParroquial() ? $user->parroquia_id : $parroquiaFiltro;
-
-        /**
-         * AJUSTE PARA DESGLOSE (DRILL-DOWN):
-         * Hemos comentado la anulación de filtros para Prefecto.
-         * Ahora, si seleccionas Prefecto y luego un Cantón, verás los votos 
-         * del Prefecto en ese Cantón específico.
-         */
-        /* if ($dignidadSeleccionada === 'Prefecto') {
-            $finalCantonId = null;
-            $finalParroquiaId = null;
-        } 
-        */
 
         // 4. Consulta de Candidatos y Votos con Sumatoria Agregada
         $resultados = Candidato::with(['partido'])
@@ -78,7 +68,6 @@ class ResultadoController extends Controller
             ->selectRaw('SUM(votos_blancos) as blancos, SUM(votos_nulos) as nulos, COUNT(id) as total_actas')
             ->first();
 
-        // Valores por defecto en caso de que no existan actas aún
         $votosBlancos = $totales->blancos ?? 0;
         $votosNulos = $totales->nulos ?? 0;
         $sumaVotosCandidatos = $resultados->sum('total_votos');
@@ -92,22 +81,43 @@ class ResultadoController extends Controller
             'granTotalVotos'       => $sumaVotosCandidatos + $votosBlancos + $votosNulos,
             'dignidadSeleccionada' => $dignidadSeleccionada,
             'pestanasVisibles'     => $pestanasVisibles,
-            
-            // Cantones disponibles para General y Provincial
             'cantones'             => ($user->esAdminGeneral() || $user->role === 'admin_provincial') 
-                                      ? Canton::orderBy('nombre')->get() 
-                                      : [],
-                                      
-            // Carga dinámica de parroquias según el cantón seleccionado
+                                      ? Canton::orderBy('nombre')->get() : [],
             'parroquias'           => ($finalCantonId) 
-                                      ? Parroquia::where('canton_id', $finalCantonId)->orderBy('nombre')->get() 
-                                      : []
+                                      ? Parroquia::where('canton_id', $finalCantonId)->orderBy('nombre')->get() : []
         ]);
     }
 
     /**
-     * Define qué pestañas puede ver el usuario según su rol y la configuración de jurisdicción.
+     * Muestra el desglose de votos por Recinto y Mesa para un candidato.
      */
+    public function detalle(Candidato $candidato)
+    {
+        // Consultamos los votos detallados usando joins
+        $detalles = DB::table('acta_candidato')
+            ->join('actas', 'acta_candidato.acta_id', '=', 'actas.id')
+            ->join('mesas', 'actas.mesa_id', '=', 'mesas.id')
+            ->join('recintos', 'mesas.recinto_id', '=', 'recintos.id')
+            ->join('parroquias', 'recintos.parroquia_id', '=', 'parroquias.id')
+            ->where('acta_candidato.candidato_id', $candidato->id)
+            ->select(
+                'parroquias.nombre as parroquia',
+                'recintos.nombre as recinto',
+                'mesas.numero as mesa',
+                'mesas.genero',
+                'acta_candidato.votos'
+            )
+            ->orderBy('parroquias.nombre')
+            ->orderBy('recintos.nombre')
+            ->orderBy('mesas.numero')
+            ->get();
+
+        return view('resultados_detalle', [
+            'candidato' => $candidato,
+            'detalles'  => $detalles
+        ]);
+    }
+
     private function obtenerPestanasVisibles($user, $config)
     {
         if ($user->esAdminGeneral()) {
@@ -115,8 +125,6 @@ class ResultadoController extends Controller
         }
 
         $pestanas = [];
-
-        // Admin Provincial ve Prefectos por defecto y Alcaldes
         if ($user->role === 'admin_provincial') {
             $pestanas[] = 'Prefecto';
             $pestanas[] = 'Alcalde';
@@ -125,24 +133,17 @@ class ResultadoController extends Controller
         if ($user->esAdminCantonal()) {
             $pestanas[] = 'Alcalde';
             $pestanas[] = 'Concejales';
-            if ($config && $config->ver_parroquias) {
-                $pestanas[] = 'Junta Parroquial';
-            }
+            if ($config && $config->ver_parroquias) $pestanas[] = 'Junta Parroquial';
         }
 
         if ($user->esAdminParroquial()) {
             $pestanas[] = 'Junta Parroquial';
-            if ($config && $config->ver_alcalde) {
-                $pestanas[] = 'Alcalde';
-            }
+            if ($config && $config->ver_alcalde) $pestanas[] = 'Alcalde';
         }
 
-        // Acceso a Prefectura por configuración SaaS para roles menores
         if ($user->role !== 'admin_provincial') {
             if (($config && $config->ver_provincia) || $user->ver_prefectos) {
-                if (!in_array('Prefecto', $pestanas)) {
-                    array_unshift($pestanas, 'Prefecto');
-                }
+                if (!in_array('Prefecto', $pestanas)) array_unshift($pestanas, 'Prefecto');
             }
         }
 
