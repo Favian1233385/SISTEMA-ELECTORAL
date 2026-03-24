@@ -1,9 +1,8 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-           
-            {{-- Línea 4 original con protección extra --}}
-                {{ __('Resultados') }} - {{ is_array($dignidadSeleccionada) ? 'Cargando...' : ($dignidadSeleccionada ?? 'Sin Selección') }}
+            {{-- Línea con protección contra arrays --}}
+            {{ __('Resultados') }} - {{ is_array($dignidadSeleccionada) ? 'Cargando...' : ($dignidadSeleccionada ?? 'Sin Selección') }}
         </h2>
     </x-slot>
 
@@ -15,11 +14,16 @@
                 <ul class="flex flex-wrap -mb-px text-sm font-medium text-center text-gray-500">
                     @foreach($pestanasVisibles as $pestana)
                         <li class="me-2">
-                            <a href="{{ route('resultados.index', ['dignidad' => $pestana]) }}" 
+                            {{-- Ajustado para mantener canton_id y parroquia_id al cambiar de pestaña --}}
+                            <a href="{{ route('resultados.index', [
+                                'dignidad' => $pestana, 
+                                'canton_id' => request('canton_id'), 
+                                'parroquia_id' => request('parroquia_id')
+                            ]) }}" 
                                class="inline-flex p-4 border-b-2 rounded-t-lg transition-colors 
                                {{ $dignidadSeleccionada === $pestana 
-                                    ? 'text-blue-600 border-blue-600 dark:text-blue-500 dark:border-blue-500 active' 
-                                    : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300' }}">
+                                   ? 'text-blue-600 border-blue-600 dark:text-blue-500 dark:border-blue-500 active' 
+                                   : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300' }}">
                                 {{ $pestana }}
                             </a>
                         </li>
@@ -94,11 +98,15 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         @forelse($resultados as $candidato)
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                {{-- Celda de Candidato con Enlace a Detalle --}}
+                                {{-- Celda de Candidato con Enlace a Detalle Herendando Filtros --}}
                                 <td class="px-6 py-4 font-bold">
-                                    <a href="{{ route('resultados.detalle', $candidato->id) }}" class="text-blue-600 dark:text-blue-400 hover:underline flex flex-col">
+                                    <a href="{{ route('resultados.detalle', [
+                                        'candidato' => $candidato->id, 
+                                        'canton_id' => request('canton_id'), 
+                                        'parroquia_id' => request('parroquia_id')
+                                    ]) }}" class="text-blue-600 dark:text-blue-400 hover:underline flex flex-col">
                                         <span>{{ $candidato->nombre }}</span>
-                                        <span class="text-[10px] font-normal text-gray-400 italic">Ver desglose por mesas</span>
+                                        <span class="text-[10px] font-normal text-gray-400 italic">Ver desglose de esta zona</span>
                                     </a>
                                 </td>
                                 <td class="px-6 py-4 text-xs">

@@ -91,15 +91,30 @@ class ResultadoController extends Controller
     /**
      * Muestra el desglose de votos por Recinto y Mesa para un candidato.
      */
-    public function detalle(Candidato $candidato)
+    public function detalle(Request $request, Candidato $candidato)
     {
-        // Consultamos los votos detallados usando joins
+        // Capturamos los filtros que vienen de la vista anterior
+        $cantonId = $request->get('canton_id');
+        $parroquiaId = $request->get('parroquia_id');
+
         $detalles = DB::table('acta_candidato')
             ->join('actas', 'acta_candidato.acta_id', '=', 'actas.id')
             ->join('mesas', 'actas.mesa_id', '=', 'mesas.id')
             ->join('recintos', 'mesas.recinto_id', '=', 'recintos.id')
             ->join('parroquias', 'recintos.parroquia_id', '=', 'parroquias.id')
             ->where('acta_candidato.candidato_id', $candidato->id)
+            
+            // --- INICIO DE FILTROS DINÁMICOS ---
+            // Si hay un cantón seleccionado, filtramos por ese cantón
+            ->when($cantonId, function($q) use ($cantonId) {
+                return $q->where('parroquias.canton_id', $cantonId);
+            })
+            // Si hay una parroquia seleccionada, filtramos solo por esa parroquia
+            ->when($parroquiaId, function($q) use ($parroquiaId) {
+                return $q->where('parroquias.id', $parroquiaId);
+            })
+            // --- FIN DE FILTROS DINÁMICOS ---
+
             ->select(
                 'parroquias.nombre as parroquia',
                 'recintos.nombre as recinto',
@@ -114,7 +129,10 @@ class ResultadoController extends Controller
 
         return view('resultados_detalle', [
             'candidato' => $candidato,
-            'detalles'  => $detalles
+            'detalles'  => $detalles,
+            // Pasamos los IDs a la vista por si quieres configurar el botón "Volver"
+            'cantonId'  => $cantonId,
+            'parroquiaId' => $parroquiaId
         ]);
     }
 
