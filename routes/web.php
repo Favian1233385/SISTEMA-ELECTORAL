@@ -24,6 +24,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Detalle de votos por candidato (La que acabamos de agregar)
     Route::get('/resultados/detalle/{candidato}', [ResultadoController::class, 'detalle'])->name('resultados.detalle');
+
+    // --- NUEVA RUTA PARA PDF ---
+    Route::get('/resultados/pdf', [ResultadoController::class, 'generarPDF'])->name('resultados.pdf');
     
     // El Dashboard sigue igual
     Route::get('/dashboard', [TerritorioController::class, 'dashboard'])->name('dashboard');

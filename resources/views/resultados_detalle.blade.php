@@ -4,7 +4,12 @@
             <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
                 {{ __('Desglose de Votos') }}: {{ $candidato->nombre }}
             </h2>
-            <a href="{{ route('resultados.index', ['dignidad' => $candidato->dignidad]) }}" 
+            {{-- Botón Volver actualizado con persistencia de filtros --}}
+            <a href="{{ route('resultados.index', [
+                    'dignidad' => $candidato->dignidad, 
+                    'canton_id' => request('canton_id'), 
+                    'parroquia_id' => request('parroquia_id')
+                ]) }}" 
                class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-white transition ease-in-out duration-150">
                 &larr; Volver
             </a>
