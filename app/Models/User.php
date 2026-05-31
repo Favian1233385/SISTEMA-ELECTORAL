@@ -1,6 +1,11 @@
 <?php
 
 namespace App\Models;
+use App\Models\Provincia;
+use App\Models\Canton;
+use App\Models\Parroquia;
+use App\Models\Recinto;
+use App\Models\Mesa;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,6 +21,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',              // admin, admin_provincial, admin_cantonal, admin_parroquial, digitador
+        'proceso_eleccion',      // <-- 'general' o 'primaria' (Define qué ve el usuario)
         'dignidad_asignada', // prefecto, alcalde, concejal, junta_parroquial
         'provincia_id',
         'canton_id',
@@ -33,6 +39,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'ver_prefectos' => 'boolean',
+        
     ];
 
     // --- MÉTODOS DE LÓGICA DE ROLES CORREGIDOS ---
@@ -82,11 +89,12 @@ class User extends Authenticatable
      */
     public function ubicacionAsignada()
     {
-        if ($this->mesa_id) return "Mesa #" . ($this->mesa->numero ?? 'S/N');
-        if ($this->recinto_id) return $this->recinto->nombre ?? 'Recinto';
-        if ($this->parroquia_id) return $this->parroquia->nombre ?? 'Parroquia';
-        if ($this->canton_id) return $this->canton->nombre ?? 'Cantón';
-        if ($this->provincia_id) return $this->provincia->nombre ?? 'Provincia';
+        // Usamos el operador nullsafe (?->) para evitar errores si la relación es nula
+        if ($this->mesa_id) return "Mesa #" . ($this->mesa?->numero ?? 'S/N');
+        if ($this->recinto_id) return $this->recinto?->nombre ?? 'Recinto';
+        if ($this->parroquia_id) return $this->parroquia?->nombre ?? 'Parroquia';
+        if ($this->canton_id) return $this->canton?->nombre ?? 'Cantón';
+        if ($this->provincia_id) return $this->provincia?->nombre ?? 'Provincia';
         return 'Acceso Total';
     }
 

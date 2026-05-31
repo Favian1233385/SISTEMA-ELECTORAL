@@ -20,10 +20,12 @@ class DatabaseSeeder extends Seeder
             'email' => 'admin123@gmail.com',
             'password' => bcrypt('admin12344'), // Pon la clave que desees aquí
         ]);
+        
 
         // Llamamos al seeder de los territorios que ya tenías
         $this->call([
             EcuadorTerritorioSeeder::class,
+            ProvinciaSeeder::class,
         ]);
     }
 }

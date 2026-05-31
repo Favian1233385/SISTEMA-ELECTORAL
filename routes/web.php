@@ -10,6 +10,8 @@ use App\Http\Controllers\{
     JurisdiccionConfigController,
     ResultadoController // Correcto
 };
+use App\Http\Controllers\ImportController;
+use App\Http\Controllers\UserGenerationController;
 use Illuminate\Support\Facades\Route;
 
 // --- RUTAS PÚBLICAS ---
@@ -42,7 +44,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/parroquias/{canton_id}', [ActaController::class, 'getParroquias']);
         Route::get('/recintos/{parroquia_id}', [ActaController::class, 'getRecintos']);
         Route::get('/mesas/{recinto_id}', [ActaController::class, 'getMesas']);
-        
+        Route::get('/get-candidatos-filtrados', [ActaController::class, 'getCandidatosFiltrados'])->name('candidatos.filtrados');
+
         Route::get('/cantones/{canton}/parroquias', function($cantonId) {
             return App\Models\Parroquia::where('canton_id', $cantonId)
                 ->select('id', 'nombre')
@@ -54,14 +57,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --- BLOQUE: SOLO DIGITADORES ---
     Route::middleware(['solo.digitadores'])->group(function () {
         Route::post('/actas', [ActaController::class, 'store'])->name('actas.store');
+
     });
     
     // --- BLOQUE: SOLO ADMINISTRADORES ---
-    Route::middleware(['admin'])->group(function () {
+        Route::middleware(['admin'])->group(function () {
         Route::get('/estadisticas', [TerritorioController::class, 'dashboard'])->name('estadisticas.index');
         Route::resource('actas', ActaController::class)->except(['index', 'show', 'create', 'store']);
         Route::resource('partidos', PartidoController::class);
         Route::resource('candidatos', CandidatoController::class);
+        // Asegúrate de que esté dentro del grupo de rutas de administración
+        Route::delete('/admin/usuarios/limpiar', [App\Http\Controllers\UserGenerationController::class, 'limpiarDigitadores'])->name('usuarios.limpiar');
 
         // Gestión de Usuarios
         Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
@@ -78,6 +84,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/territorios/parroquia', [TerritorioController::class, 'storeParroquia'])->name('parroquia.store');
         Route::post('/territorios/recinto', [TerritorioController::class, 'storeRecinto'])->name('recinto.store');
         Route::post('/territorios/mesa', [TerritorioController::class, 'storeMesa'])->name('mesa.store');
+        Route::post('/importar-datos-electorales', [ImportController::class, 'import'])->name('import.electoral');
+        // Ruta para procesar la creación de usuarios
+        Route::post('/generar-digitadores', [UserGenerationController::class, 'generarDigitadores'])->name('usuarios.generar');
+        // AQUÍ AGREGAMOS LA NUEVA RUTA PARA VER E IMPRIMIR
+        Route::get('/ver-digitadores', [UserGenerationController::class, 'verDigitadores'])->name('admin.ver.digitadores');
 
         Route::put('/recinto/{id}', [TerritorioController::class, 'updateRecinto'])->name('recinto.update');
         Route::delete('/recinto/{id}', [TerritorioController::class, 'destroyRecinto'])->name('recinto.destroy');

@@ -74,6 +74,23 @@ Route::get('/mesas/{recinto_id}', function (Request $request, $recinto_id) {
     });
 });
 
-// 5. Obtener Candidatos dinámicamente por Dignidad
-// Esta ruta permitirá cargar fotos y nombres automáticamente al cambiar el select de dignidad
-Route::get('/candidatos/{dignidad}', [App\Http\Controllers\CandidatoController::class, 'getByDignidad']);
+// 5. Obtener Candidatos con filtros de ubicación (Para Alcaldes y Juntas)
+Route::get('/candidatos-filtrados', function (Request $request) {
+    $query = \App\Models\Candidato::with('partido');
+
+    if ($request->dignidad) {
+        $query->where('dignidad', $request->dignidad);
+    }
+
+    // Filtro por cantón (Solo si la dignidad es alcalde o concejal)
+    if ($request->canton_id && in_array($request->dignidad, ['alcalde', 'concejal'])) {
+        $query->where('canton_id', $request->canton_id);
+    }
+
+    // Filtro por parroquia (Solo si es junta parroquial)
+    if ($request->parroquia_id && $request->dignidad == 'junta_parroquial') {
+        $query->where('parroquia_id', $request->parroquia_id);
+    }
+
+    return $query->orderBy('nombre', 'asc')->get();
+});

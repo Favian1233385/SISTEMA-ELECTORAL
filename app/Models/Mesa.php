@@ -16,7 +16,8 @@ class Mesa extends Model
         'genero', // Masculino o Femenino (según el padrón electoral de Ecuador)
         'recinto_id',
         'num_electores', // Útil para validar que los votos no superen el total de la mesa
-        'estado' // Estado de la mesa: Habilitada o Deshabilitada
+        'estado', // Estado de la mesa: Habilitada o Deshabilitada
+        'tipo_proceso',   
     ];
 
     // Una mesa pertenece a un recinto
@@ -29,5 +30,10 @@ class Mesa extends Model
     public function votos()
     {
         return $this->hasMany(Voto::class);
+    }
+
+    public function actas() 
+    {
+        return $this->hasMany(Acta::class);
     }
 }

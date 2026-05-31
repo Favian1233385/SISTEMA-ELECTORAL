@@ -9,7 +9,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             
             {{-- Banner Informativo --}}
-            <div class="mb-8 p-6 bg-gradient-to-r from-indigo-800 to-blue-700 rounded-2xl shadow-xl text-white">
+            <div class="mb-8 p-6 bg-gradient-to-r from-indigo-800 to-blue-700 rounded-2xl shadow-xl text-black">
                 <h3 class="text-2xl font-bold">Bienvenido, {{ Auth::user()->name }}</h3>
                 <p class="opacity-80 font-light">
                     {{-- Ajuste de texto según el nivel de mando --}}
@@ -22,6 +22,33 @@
                     @endif
                 </p>
             </div>
+            {{-- NUEVO BLOQUE: ORIENTACIÓN TERRITORIAL Y DIGNIDAD --}}
+            @if(Auth::user()->role === 'digitador')
+            <div class="mb-8 bg-white border-l-8 border-emerald-500 rounded-2xl shadow-lg p-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="flex-1">
+                        <h4 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">📍 Ubicación de Transmisión</h4>
+                        <p class="text-gray-700 text-lg">
+                            <span class="font-bold text-slate-900">{{ Auth::user()->provincia->nombre ?? 'N/A' }}</span> / 
+                            <span class="font-medium text-slate-800">{{ Auth::user()->canton->nombre ?? 'N/A' }}</span> / 
+                            <span class="font-medium text-slate-600">{{ Auth::user()->parroquia->nombre ?? 'N/A' }}</span>
+                        </p>
+                        <p class="text-sm text-slate-500 mt-1">
+                            <span class="font-semibold text-indigo-600">Recinto:</span> {{ Auth::user()->mesa->recinto->nombre ?? 'Sin Recinto' }} | 
+                            <span class="font-semibold text-indigo-600">Junta:</span> #{{ Auth::user()->mesa->numero ?? 'S/N' }} ({{ Auth::user()->mesa->genero ?? '' }})
+                        </p>
+                    </div>
+                    
+                    {{-- ORIENTACIÓN POR DIGNIDAD --}}
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-xl px-6 py-3 text-center w-full md:w-auto">
+                        <span class="block text-[10px] font-black text-emerald-700 uppercase tracking-tighter">Dignidad a Procesar</span>
+                        <span class="text-xl font-extrabold text-emerald-900 uppercase">
+                            {{ Auth::user()->dignidad_asignada ?? 'GENERAL' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                 
@@ -110,7 +137,7 @@
                     <h4 class="text-gray-800 font-extrabold text-lg mb-2">Conteo de Votos</h4>
                     <div class="flex flex-col gap-1.5 text-sm text-indigo-600 font-medium">
                         @if(Auth::user()->role === 'digitador')
-                            <a href="{{ route('actas.create') }}" class="font-bold bg-emerald-600 text-white text-center py-2 rounded-lg hover:bg-emerald-700 transition shadow-md">
+                            <a href="{{ route('actas.create') }}" class="font-bold bg-emerald-600 text-black text-center py-2 rounded-lg hover:bg-emerald-700 transition shadow-md">
                                 Ingresar Actas
                             </a>
                         @else

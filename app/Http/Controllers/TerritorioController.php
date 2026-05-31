@@ -118,8 +118,15 @@ class TerritorioController extends Controller
         }
 
         // 5. POR DEFECTO: Mostramos PROVINCIAS
-        $provincias = \App\Models\Provincia::withCount('cantones')->get();
-        return view('territorios.index', compact('provincias'));
+        $todasLasProvincias = \App\Models\Provincia::orderBy('nombre', 'asc')->get();
+
+        // Variable 2: Solo las provincias activas para las tarjetas de visualización (Abajo)
+        $provinciasActivas = \App\Models\Provincia::has('cantones')
+            ->withCount('cantones')
+            ->orderBy('nombre', 'asc')
+            ->get();
+
+        return view('territorios.index', compact('todasLasProvincias', 'provinciasActivas'));
     }
 
     public function storeParroquia(Request $request) 

@@ -33,18 +33,32 @@ class ResultadoController extends Controller
         $cantonFiltro = $request->get('canton_id');
         $parroquiaFiltro = $request->get('parroquia_id');
 
-        if ($user->esAdminGeneral() || $user->role === 'admin_provincial') {
+        // SEGURIDAD: Validación territorial estricta para administradores de provincia
+        if ($user->esAdminGeneral()) {
             $finalCantonId = $cantonFiltro;
+        } elseif ($user->role === 'admin_provincial') {
+            // Si el admin provincial intenta enviar un cantón por formulario, validamos que pertenezca a SU provincia
+            if ($cantonFiltro) {
+                $cantonValido = Canton::where('id', $cantonFiltro)->where('provincia_id', $user->provincia_id)->exists();
+                $finalCantonId = $cantonValido ? $cantonFiltro : null;
+            } else {
+                $finalCantonId = null; // Carga global de su provincia si no filtra cantón
+            }
         } else {
             $finalCantonId = $user->canton_id;
         }
+        
         $finalParroquiaId = $user->esAdminParroquial() ? $user->parroquia_id : $parroquiaFiltro;
 
         // 4. Consulta de Candidatos FILTRADA POR JURISDICCIÓN
         $queryResultados = Candidato::with(['partido'])
             ->where('dignidad', $dignidadSeleccionada);
 
-        // Aplicar filtro de jurisdicción al candidato para que no salgan candidatos de otros cantones
+        // Si es administrador provincial y se está consultando la dignidad de 'Prefecto'
+        if ($user->role === 'admin_provincial' && $dignidadSeleccionada === 'Prefecto') {
+            $queryResultados->where('provincia_id', $user->provincia_id);
+        }
+
         $queryResultados->when($finalCantonId, function($q) use ($finalCantonId, $dignidadSeleccionada) {
             if (in_array($dignidadSeleccionada, ['Alcalde', 'Concejales'])) {
                 return $q->where('canton_id', $finalCantonId);
@@ -58,8 +72,11 @@ class ResultadoController extends Controller
             return $q;
         });
 
-        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId) {
-                $query->when($finalCantonId, function($q) use ($finalCantonId) {
+        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user) {
+                $query->when($user->role === 'admin_provincial', function($q) use ($user) {
+                    $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                })
+                ->when($finalCantonId, function($q) use ($finalCantonId) {
                     $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
                 })
                 ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
@@ -71,6 +88,9 @@ class ResultadoController extends Controller
             
         // 5. Cálculo de Totales y ESCRUTINIO REAL
         $totales = Acta::where('dignidad', $dignidadSeleccionada)
+            ->when($user->role === 'admin_provincial', function($q) use ($user) {
+                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+            })
             ->when($finalCantonId, function($q) use ($finalCantonId) {
                 $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
             })
@@ -84,6 +104,8 @@ class ResultadoController extends Controller
         $totalMesasJurisdiccion = DB::table('mesas')
             ->join('recintos', 'mesas.recinto_id', '=', 'recintos.id')
             ->join('parroquias', 'recintos.parroquia_id', '=', 'parroquias.id')
+            ->join('cantones', 'parroquias.canton_id', '=', 'cantones.id')
+            ->when($user->role === 'admin_provincial', fn($q) => $q->where('cantones.provincia_id', $user->provincia_id))
             ->when($finalCantonId, fn($q) => $q->where('parroquias.canton_id', $finalCantonId))
             ->when($finalParroquiaId, fn($q) => $q->where('parroquias.id', $finalParroquiaId))
             ->count();
@@ -96,6 +118,16 @@ class ResultadoController extends Controller
         $votosNulos = $totales->nulos ?? 0;
         $sumaVotosCandidatos = $resultados->sum('total_votos');
 
+        // 6. FILTRADO CORREGIDO PARA EL SELECTOR DE CANTONES EN LA VISTA
+        if ($user->esAdminGeneral()) {
+            $cantonesVisibles = Canton::orderBy('nombre')->get();
+        } elseif ($user->role === 'admin_provincial') {
+            // Si es Admin Provincial, el selector cargará únicamente los cantones de SU provincia
+            $cantonesVisibles = Canton::where('provincia_id', $user->provincia_id)->orderBy('nombre')->get();
+        } else {
+            $cantonesVisibles = [];
+        }
+
         return view('resultados', [
             'resultados'           => $resultados,
             'totalVotosBlancos'    => $votosBlancos,
@@ -105,8 +137,7 @@ class ResultadoController extends Controller
             'granTotalVotos'       => $sumaVotosCandidatos + $votosBlancos + $votosNulos,
             'dignidadSeleccionada' => $dignidadSeleccionada,
             'pestanasVisibles'     => $pestanasVisibles,
-            'cantones'             => ($user->esAdminGeneral() || $user->role === 'admin_provincial') 
-                                      ? Canton::orderBy('nombre')->get() : [],
+            'cantones'             => $cantonesVisibles,
             'parroquias'           => ($finalCantonId) 
                                       ? Parroquia::where('canton_id', $finalCantonId)->orderBy('nombre')->get() : []
         ]);
@@ -114,15 +145,24 @@ class ResultadoController extends Controller
 
     public function detalle(Request $request, Candidato $candidato)
     {
+        $user = Auth::user();
         $cantonId = $request->get('canton_id');
         $parroquiaId = $request->get('parroquia_id');
+
+        // Seguridad perimetral en la vista de auditoría detallada
+        if ($user->role === 'admin_provincial' && $cantonId) {
+            $pertenece = Canton::where('id', $cantonId)->where('provincia_id', $user->provincia_id)->exists();
+            if (!$pertenece) abort(403, 'Acceso geográfico no autorizado.');
+        }
 
         $detalles = DB::table('acta_candidato')
             ->join('actas', 'acta_candidato.acta_id', '=', 'actas.id')
             ->join('mesas', 'actas.mesa_id', '=', 'mesas.id')
             ->join('recintos', 'mesas.recinto_id', '=', 'recintos.id')
             ->join('parroquias', 'recintos.parroquia_id', '=', 'parroquias.id')
+            ->join('cantones', 'parroquias.canton_id', '=', 'cantones.id')
             ->where('acta_candidato.candidato_id', $candidato->id)
+            ->when($user->role === 'admin_provincial', fn($q) => $q->where('cantones.provincia_id', $user->provincia_id))
             ->when($cantonId, fn($q) => $q->where('parroquias.canton_id', $cantonId))
             ->when($parroquiaId, fn($q) => $q->where('parroquias.id', $parroquiaId))
             ->select(
@@ -157,12 +197,22 @@ class ResultadoController extends Controller
 
         $cantonFiltro = $request->get('canton_id');
         $parroquiaFiltro = $request->get('parroquia_id');
+        
+        // Bloqueo territorial homólogo al index para evitar inyecciones en el PDF
         $finalCantonId = ($user->esAdminGeneral() || $user->role === 'admin_provincial') ? $cantonFiltro : $user->canton_id;
+        if ($user->role === 'admin_provincial' && $cantonFiltro) {
+            $cantonValido = Canton::where('id', $cantonFiltro)->where('provincia_id', $user->provincia_id)->exists();
+            $finalCantonId = $cantonValido ? $cantonFiltro : null;
+        }
+
         $finalParroquiaId = $user->esAdminParroquial() ? $user->parroquia_id : $parroquiaFiltro;
 
-        // CONSULTA DE RESULTADOS FILTRADA PARA EL PDF (Igual al index)
         $queryResultados = Candidato::with(['partido'])
             ->where('dignidad', $dignidadSeleccionada);
+
+        if ($user->role === 'admin_provincial' && $dignidadSeleccionada === 'Prefecto') {
+            $queryResultados->where('provincia_id', $user->provincia_id);
+        }
 
         $queryResultados->when($finalCantonId, function($q) use ($finalCantonId, $dignidadSeleccionada) {
             if (in_array($dignidadSeleccionada, ['Alcalde', 'Concejales'])) {
@@ -177,8 +227,11 @@ class ResultadoController extends Controller
             return $q;
         });
 
-        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId) {
-                $query->when($finalCantonId, function($q) use ($finalCantonId) {
+        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user) {
+                $query->when($user->role === 'admin_provincial', function($q) use ($user) {
+                    $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                })
+                ->when($finalCantonId, function($q) use ($finalCantonId) {
                     $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
                 })
                 ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
@@ -189,6 +242,9 @@ class ResultadoController extends Controller
             ->get();
 
         $totales = Acta::where('dignidad', $dignidadSeleccionada)
+            ->when($user->role === 'admin_provincial', function($q) use ($user) {
+                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+            })
             ->when($finalCantonId, function($q) use ($finalCantonId) {
                 $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
             })
@@ -198,12 +254,13 @@ class ResultadoController extends Controller
             ->selectRaw('SUM(votos_blancos) as blancos, SUM(votos_nulos) as nulos, COUNT(id) as total_actas')
             ->first();
 
-        // Determinar nombre del lugar para el reporte
         $nombreLugar = 'PROVINCIAL';
         if ($finalParroquiaId) {
             $nombreLugar = 'PARROQUIA: ' . Parroquia::find($finalParroquiaId)->nombre;
         } elseif ($finalCantonId) {
             $nombreLugar = 'CANTÓN: ' . Canton::find($finalCantonId)->nombre;
+        } elseif ($user->role === 'admin_provincial') {
+            $nombreLugar = 'PROVINCIA DE MONITOREO';
         }
 
         $data = [
