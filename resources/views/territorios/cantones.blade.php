@@ -29,6 +29,15 @@
                                 @csrf
                                 <input type="hidden" name="tipo" value="canton">
                                 <input type="hidden" name="id" value="{{ $canton->id }}">
+                                
+                                {{-- NUEVO: Selector de Tipo de Proceso Electoral --}}
+                                <div class="mb-2">
+                                    <select name="proceso_eleccion" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 font-bold uppercase py-1 bg-slate-50 text-slate-700">
+                                        <option value="generales" selected>Para: Elecciones Generales</option>
+                                        <option value="primarias">Para: Elecciones Primarias</option>
+                                    </select>
+                                </div>
+
                                 {{-- Selector de Dignidad para el Cantón --}}
                                 <div class="mb-2">
                                     <select name="dignidad" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 font-bold uppercase py-1">
@@ -38,6 +47,7 @@
                                         <option value="PREFECTO">PREFECTO</option>
                                     </select>
                                 </div>
+
                                 <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter">
                                     ⚙️ Generar Digitadores
                                 </button>
@@ -45,7 +55,7 @@
 
                             {{-- BOTÓN 2: VER / IMPRIMIR --}}
                             <a href="{{ route('admin.ver.digitadores', ['tipo' => 'canton', 'id' => $canton->id]) }}" 
-                               class="w-full bg-emerald-600 hover:bg-emerald-700 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center">
+                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center">
                                 👁️ Ver / Imprimir Digitadores
                             </a>
                         </div>

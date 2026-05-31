@@ -13,7 +13,8 @@
             <div class="bg-white p-6 rounded-2xl shadow-xl">
                 <div class="flex justify-between items-center mb-8 border-b pb-4">
                     <h3 class="font-bold text-lg text-slate-700 uppercase tracking-tight">Listado de Mesas (JRV)</h3>
-                    <button onclick="document.getElementById('modalMesa').classList.remove('hidden'); document.getElementById('modalMesa').classList.add('flex')" class="bg-emerald-600 text-black px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 transition">
+                    {{-- AJUSTE: text-white para contraste óptimo --}}
+                    <button onclick="document.getElementById('modalMesa').classList.remove('hidden'); document.getElementById('modalMesa').classList.add('flex')" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 transition">
                         + Agregar Mesa Manualmente
                     </button>
                 </div>
@@ -34,6 +35,7 @@
                             <tr class="hover:bg-slate-50/50 transition">
                                 <td class="p-4 font-bold text-slate-700">Mesa #{{ $mesa->numero }}</td>
                                 <td class="p-4 text-slate-600">
+                                    {{-- El condicional se mantiene en MASCULINO para alinearse al CNE --}}
                                     <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase {{ $mesa->genero == 'MASCULINO' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700' }}">
                                         {{ $mesa->genero }}
                                     </span>
@@ -80,6 +82,7 @@
         </div>
     </div>
 
+    {{-- MODAL CREAR --}}
     <div id="modalMesa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100">
             <h3 class="text-xl font-black mb-6 text-slate-800 uppercase">Registrar Nueva Mesa (JRV)</h3>
@@ -96,8 +99,9 @@
                     <label class="block text-xs font-black uppercase text-slate-400 mb-2">Género:</label>
                     <select name="genero" class="w-full border-slate-200 rounded-xl focus:ring-indigo-500 shadow-sm" required>
                         <option value="" disabled selected>Seleccione un género</option>
-                        <option value="Masculino">Masculino</option>
-                        <option value="Femenino">Femenino</option>
+                        {{-- AJUSTE QUIRÚRGICO: Valores normalizados en MAYÚSCULAS para match de base de datos --}}
+                        <option value="MASCULINO">Masculino</option>
+                        <option value="FEMENINO">Femenino</option>
                     </select>
                 </div>
 
@@ -114,6 +118,7 @@
         </div>
     </div>
 
+    {{-- MODAL EDITAR --}}
     <div id="modalEditarMesa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100">
             <h3 class="text-xl font-black mb-6 text-slate-800 uppercase">Editar Datos de la Mesa</h3>
@@ -132,7 +137,8 @@
 
                 <div class="flex justify-end gap-3 mt-8">
                     <button type="button" onclick="cerrarModalEditar()" class="px-5 py-2 text-slate-500 font-bold">Cancelar</button>
-                    <button type="submit" class="px-6 py-2 bg-blue-600 text-black rounded-xl font-bold shadow-lg shadow-blue-200">Actualizar Mesa</button>
+                    {{-- AJUSTE: text-white para contraste óptimo --}}
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200">Actualizar Mesa</button>
                 </div>
             </form>
         </div>
@@ -140,15 +146,12 @@
 
     <script>
         function abrirModalEditarMesa(id, numero, electores) {
-            // Seteamos la acción del formulario dinámicamente
             const form = document.getElementById('formEditarMesa');
             form.action = `/mesa/${id}`; 
 
-            // Rellenamos los campos
             document.getElementById('edit_numero').value = numero;
             document.getElementById('edit_electores').value = electores;
 
-            // Mostramos el modal
             const modal = document.getElementById('modalEditarMesa');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -160,10 +163,9 @@
             modal.classList.remove('flex');
         }
 
-        // Cerrar modales si se hace clic fuera del contenido
         window.onclick = function(event) {
             const modal1 = document.getElementById('modalMesa');
-            const modal2 = document.getElementById('modalEditarMesa');
+            modal2 = document.getElementById('modalEditarMesa');
             if (event.target == modal1) modal1.classList.add('hidden');
             if (event.target == modal2) modal2.classList.add('hidden');
         }

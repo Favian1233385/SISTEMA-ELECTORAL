@@ -20,50 +20,55 @@
                         + Nuevo Recinto
                     </button>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- DISEÑO UNIFICADO: Cuadrícula de 4 Columnas para mantener la consistencia SaaS --}}
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     @foreach($recintos as $recinto)
-                        <div class="p-6 border-2 border-slate-100 rounded-3xl bg-white hover:border-indigo-500 transition shadow-sm group flex flex-col justify-between">
+                        <div class="p-6 border-2 border-slate-100 rounded-3xl bg-white hover:border-indigo-500 transition shadow-sm group flex flex-col justify-between h-full">
                             
-                            <div class="flex justify-between items-start mb-6">
-                                <div class="flex gap-4">
-                                    <div class="text-slate-800 bg-slate-50 p-2 rounded-2xl">
-                                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <p class="font-black text-xl text-slate-800 uppercase leading-tight">{{ $recinto->nombre }}</p>
-                                        <p class="text-xs text-slate-400 font-bold uppercase mt-1">{{ $recinto->direccion ?? 'Sin dirección' }}</p>
-                                    </div>
+                            {{-- INFORMACIÓN SUPERIOR DEL RECINTO --}}
+                            <div class="mb-4 text-center">
+                                <div class="text-slate-800 bg-slate-50 p-2 rounded-2xl inline-block mb-3">
+                                    <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                    </svg>
                                 </div>
-                                <span class="bg-indigo-50 text-indigo-600 text-[10px] font-black px-3 py-1 rounded-full uppercase">
-                                    {{ $recinto->mesas_count ?? 0 }} MESAS
-                                </span>
+                                <p class="font-black text-base text-slate-800 uppercase leading-tight h-12 flex items-center justify-center">{{ $recinto->nombre }}</p>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase mt-1 truncate" title="{{ $recinto->direccion }}">{{ $recinto->direccion ?? 'Sin dirección' }}</p>
+                                
+                                <div class="mt-3">
+                                    <span class="bg-indigo-50 text-indigo-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">
+                                        {{ $recinto->mesas_count ?? 0 }} MESAS
+                                    </span>
+                                </div>
                             </div>
 
-                            <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
+                            {{-- BLOQUE DE ACCIONES INFERIORES --}}
+                            <div class="mt-4 pt-4 border-t border-slate-100 space-y-2">
                                 
+                                {{-- ENLACE PRINCIPAL DE ADMINISTRACIÓN --}}
                                 <a href="{{ route('territorios.index', ['recinto' => $recinto->id]) }}" 
-                                class="bg-emerald-600 text-black px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-tighter hover:bg-emerald-700 transition shadow-lg shadow-emerald-100 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                                    Administrar Juntas (Mesas)
+                                   class="w-full bg-emerald-600 hover:bg-emerald-700 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center gap-1">
+                                    👁️ Administrar Juntas
                                 </a>
 
-                                <div class="flex gap-3">
+                                {{-- BOTONES SECUNDARIOS DE EDICIÓN Y ELIMINACIÓN --}}
+                                <div class="grid grid-cols-2 gap-2">
                                     <button onclick="abrirModalEditar('{{ $recinto->id }}', '{{ $recinto->nombre }}', '{{ $recinto->direccion }}')" 
-                                            class="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition shadow-sm"
+                                            class="w-full py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition shadow-sm text-[10px] font-bold uppercase flex items-center justify-center gap-1"
                                             title="Editar Recinto">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                        ✏️ Editar
                                     </button>
 
-                                    <form action="{{ route('recinto.destroy', $recinto->id) }}" method="POST" onsubmit="return confirm('¿Eliminar recinto?')">
+                                    <form action="{{ route('recinto.destroy', $recinto->id) }}" method="POST" onsubmit="return confirm('¿Eliminar recinto?')" class="w-full">
                                         @csrf @method('DELETE')
                                         <button type="submit" 
-                                                class="p-3 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition shadow-sm"
+                                                class="w-full py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition shadow-sm text-[10px] font-bold uppercase flex items-center justify-center gap-1"
                                                 title="Eliminar Recinto">
-                                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            🗑️ Borrar
                                         </button>
                                     </form>
                                 </div>
+
                             </div>
                         </div>
                     @endforeach

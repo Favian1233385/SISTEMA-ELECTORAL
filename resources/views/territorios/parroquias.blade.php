@@ -37,25 +37,37 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4">
+                {{-- DISEÑO UNIFICADO: Cuadrícula de Tarjetas Verticales (Igual a Cantones) --}}
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     @foreach($parroquias as $parroquia)
-                        <div class="flex flex-col md:flex-row justify-between items-center p-5 border-2 border-slate-100 rounded-2xl bg-white mb-3 hover:border-indigo-500 transition shadow-sm gap-4">
-                            <div class="text-center md:text-left">
-                                <p class="font-black text-lg text-slate-800 uppercase leading-none">{{ $parroquia->nombre }}</p>
-                                <p class="text-xs text-slate-400 mt-1 font-bold">
-                                    {{ $parroquia->recintos_count ?? 0 }} RECINTOS REGISTRADOS
-                                </p>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border hover:border-indigo-500 hover:shadow-md transition group flex flex-col justify-between h-full text-center">
+                            
+                            {{-- CABECERA DE LA TARJETA --}}
+                            <div class="mb-4">
+                                <p class="font-black text-gray-800 group-hover:text-indigo-600 uppercase text-base leading-tight">{{ $parroquia->nombre }}</p>
+                                <p class="text-xs text-gray-400 mt-2 font-bold uppercase">{{ $parroquia->recintos_count ?? 0 }} Recintos Registrados</p>
                             </div>
 
-                            <div class="flex flex-wrap items-center justify-center gap-3">
-                                {{-- BOTÓN 1: GENERAR DIGITADORES --}}
+                            {{-- BLOQUE DE ACCIONES PARA DIGITADORES DE LA PARROQUIA --}}
+                            <div class="space-y-2 mt-auto">
+                                
+                                {{-- BOTÓN 1: FORMULARIO GENERAR --}}
                                 <form action="{{ route('usuarios.generar') }}" method="POST" onsubmit="return confirm('¿Generar usuarios para TODAS las mesas de la parroquia {{ $parroquia->nombre }}?')">
                                     @csrf
                                     <input type="hidden" name="tipo" value="parroquia">
                                     <input type="hidden" name="id" value="{{ $parroquia->id }}">
+                                    
+                                    {{-- Selector de Tipo de Proceso Electoral --}}
+                                    <div class="mb-2">
+                                        <select name="proceso_eleccion" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 font-bold uppercase py-1 bg-slate-50 text-slate-700">
+                                            <option value="generales" selected>Para: Elecciones Generales</option>
+                                            <option value="primarias">Para: Elecciones Primarias</option>
+                                        </select>
+                                    </div>
+
                                     {{-- Selector de Dignidad para la Parroquia --}}
                                     <div class="mb-2">
-                                        <select name="dignidad" required class="w-full text-[9px] rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 font-black uppercase py-1 px-2 h-8">
+                                        <select name="dignidad" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 font-bold uppercase py-1">
                                             <option value="">-- DIGNIDAD --</option>
                                             <option value="JUNTA PARROQUIAL">JUNTA PARROQUIAL</option>
                                             <option value="ALCALDE">ALCALDE</option>
@@ -63,20 +75,21 @@
                                             <option value="PREFECTO">PREFECTO</option>
                                         </select>
                                     </div>
-                                    <button type="submit" class="bg-blue-500 text-black px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-blue-600 transition shadow-md flex items-center">
+
+                                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter">
                                         ⚙️ Generar Digitadores
                                     </button>
                                 </form>
 
                                 {{-- BOTÓN 2: VER / IMPRIMIR --}}
                                 <a href="{{ route('admin.ver.digitadores', ['tipo' => 'parroquia', 'id' => $parroquia->id]) }}" 
-                                   class="bg-emerald-500 text-black px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tighter hover:bg-emerald-600 transition shadow-md flex items-center">
+                                class="w-full bg-emerald-500 hover:bg-emerald-600 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center">
                                     👁️ Ver / Imprimir
                                 </a>
 
-                                {{-- BOTÓN 3: NAVEGACIÓN --}}
+                                {{-- BOTÓN 3: NAVEGACIÓN PROPIA DE PARROQUIAS --}}
                                 <a href="{{ route('territorios.index', ['parroquia' => $parroquia->id]) }}" 
-                                   class="bg-slate-200 text-black px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-tighter hover:bg-indigo-600 hover:text-black transition shadow-sm border border-slate-300">
+                                class="w-full bg-slate-200 hover:bg-slate-300 text-black text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center border border-slate-300">
                                     Ver Recintos →
                                 </a>
                             </div>
