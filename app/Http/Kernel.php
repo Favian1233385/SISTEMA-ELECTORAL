@@ -64,9 +64,7 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
 
-        // ESTA ES LA LÍNEA QUE DEBES AGREGAR:
-        'admin' => \App\Http\Middleware\EsAdmin::class,
-        'solo.digitadores' => \App\Http\Middleware\SoloDigitadores::class,
+        // ALIAS PROFESIONAL REQUERIDO POR TU SAAS:
+        'EsAdmin' => \App\Http\Middleware\EsAdmin::class,
     ];
-    
 }

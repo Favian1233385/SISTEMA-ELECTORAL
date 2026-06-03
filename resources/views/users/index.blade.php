@@ -14,17 +14,27 @@
                         <p class="text-xs text-gray-500 mt-1">Lista exclusiva de personal administrativo y de control político.</p>
                     </div>
                     
-                    <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-black uppercase tracking-widest hover:bg-green-700 transition shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        Registrar Nuevo Delegado
-                    </a>
+                    {{-- RESTRICCIÓN DE NEGOCIO: Solo el Súper Admin General puede ver el botón de creación --}}
+                    @if(Auth::user()->esAdminGeneral())
+                        <a href="{{ route('users.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 transition shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                            </svg>
+                            Registrar Nuevo Administrador
+                        </a>
+                    @endif
                 </div>
 
+                {{-- Notificaciones de Éxito o Alertas --}}
                 @if(session('success'))
-                    <div class="mb-4 p-4 bg-green-100 border-l-4 border-green-500 text-green-700 rounded shadow-sm">
+                    <div class="mb-4 p-4 bg-green-100 border-l-4 border-green-500 text-green-700 rounded shadow-sm text-sm">
                         {{ session('success') }}
+                    </div>
+                @endif
+
+                @if(session('error'))
+                    <div class="mb-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded shadow-sm text-sm">
+                        {{ session('error') }}
                     </div>
                 @endif
                 
@@ -46,7 +56,6 @@
                                     <div class="text-sm text-gray-500">{{ $user->email }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    {{-- Asignación semántica de colores según la jerarquía del rol --}}
                                     @if($user->role === 'admin' || $user->role === 'admin_general')
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
                                             SUPER ADMIN
@@ -58,6 +67,10 @@
                                     @elseif($user->role === 'admin_cantonal')
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                                             ADMIN CANTONAL
+                                        </span>
+                                    @elseif($user->role === 'admin_parroquial')
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-teal-100 text-teal-800">
+                                            ADMIN PARROQUIAL
                                         </span>
                                     @else
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
@@ -72,19 +85,35 @@
                                         <span class="text-gray-700 font-semibold">Provincia:</span> 
                                         <span class="text-gray-900 font-medium">{{ $user->provincia->nombre ?? 'No asignada' }}</span>
                                     @else
-                                        {{-- Muestra la ruta territorial específica para delegados y cantonales --}}
                                         <div class="text-gray-800 font-medium">{{ $user->canton->nombre ?? 'Sin Cantón' }}</div>
                                         <div class="text-xs text-gray-400">{{ $user->parroquia ? $user->parroquia->nombre : 'Toda la zona / Parroquia' }}</div>
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                                    {{-- Impedimos la auto-edición accidental de super-administradores desde esta grilla --}}
-                                    @if($user->role !== 'admin' && $user->role !== 'admin_general')
-                                        <a href="{{ route('users.edit', $user->id) }}" class="inline-flex items-center px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 transition shadow-sm">
-                                            Asignar Territorio
-                                        </a>
+                                    {{-- El Súper Admin tiene control total de modificación y baja sobre todos, excepto sobre sí mismo --}}
+                                    @if(Auth::user()->esAdminGeneral())
+                                        @if($user->id !== Auth::id())
+                                            <div class="flex items-center justify-center gap-2">
+                                                {{-- Botón Editar (Cambio de nombre, email, contraseña y territorio) --}}
+                                                <a href="{{ route('users.edit', $user->id) }}" class="inline-flex items-center px-3 py-1 bg-amber-500 text-black text-xs font-semibold rounded hover:bg-amber-600 transition shadow-sm" title="Editar datos y credenciales">
+                                                    Editar
+                                                </a>
+
+                                                {{-- Botón Purgar / Eliminar (Para cierres de periodos electorales) --}}
+                                                <form action="{{ route('users.destroy', $user->id) }}" method="POST" onsubmit="return confirm('¿Está absolutamente seguro de eliminar a este administrador? Esta acción purgará su acceso de manera permanente para este periodo electoral.');" class="inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="inline-flex items-center px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition shadow-sm">
+                                                        Eliminar
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        @else
+                                            <span class="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100">Tu Cuenta Activa</span>
+                                        @endif
                                     @else
-                                        <span class="text-xs text-gray-400 italic">Acceso Jerárquico</span>
+                                        {{-- Visualización restringida si un sub-administrador provincial/cantonal entra a ver la tabla --}}
+                                        <span class="text-xs text-gray-400 italic">Sin Privilegios de Modificación</span>
                                     @endif
                                 </td>
                             </tr>

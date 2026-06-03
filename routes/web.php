@@ -60,35 +60,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     });
     
-    // --- BLOQUE: SOLO ADMINISTRADORES ---
-        Route::middleware(['admin'])->group(function () {
+    // =========================================================================
+    // --- BLOQUE: ADMINISTRADORES DE TERRITORIO (Provincial / Cantonal / Súper Admin) ---
+    // =========================================================================
+    Route::middleware(['auth'])->group(function () {
         Route::get('/estadisticas', [TerritorioController::class, 'dashboard'])->name('estadisticas.index');
         Route::resource('actas', ActaController::class)->except(['index', 'show', 'create', 'store']);
         Route::resource('partidos', PartidoController::class);
         Route::resource('candidatos', CandidatoController::class);
-        // Asegúrate de que esté dentro del grupo de rutas de administración
-        Route::delete('/admin/usuarios/limpiar', [App\Http\Controllers\UserGenerationController::class, 'limpiarDigitadores'])->name('usuarios.limpiar');
+    });
 
-        // Gestión de Usuarios
+    // =========================================================================
+    // --- BLOQUE: EXCLUSIVO SÚPER ADMINISTRADOR (Middleware: EsAdmin) ---
+    // =========================================================================
+    Route::middleware(['auth', 'EsAdmin'])->group(function () {
+        
+        // Gestión de Usuarios (CRUD Completo y Blindado para Súper Admin)
         Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
         Route::get('/usuarios/crear', [UserController::class, 'create'])->name('users.create');
         Route::post('/usuarios/guardar', [UserController::class, 'store'])->name('users.store');
         Route::get('/usuarios/{user}/editar', [UserController::class, 'edit'])->name('users.edit');
         Route::put('/usuarios/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
         
+        // Configuraciones Críticas del Sistema
         Route::get('/configuracion-jurisdicciones', [JurisdiccionConfigController::class, 'index'])->name('jurisdiccion.config');
         Route::post('/jurisdiccion-update/{id}', [JurisdiccionConfigController::class, 'update'])->name('jurisdiccion.update');
+        Route::delete('/admin/usuarios/limpiar', [UserGenerationController::class, 'limpiarDigitadores'])->name('usuarios.usuarios.limpiar');
+        Route::post('/generar-digitadores', [UserGenerationController::class, 'generarDigitadores'])->name('usuarios.generar');
+        Route::get('/ver-digitadores', [UserGenerationController::class, 'verDigitadores'])->name('admin.ver.digitadores');
 
-        // Gestión de Territorio
+        // Gestión Global de Territorio e Importación Base
         Route::get('/territorios', [TerritorioController::class, 'gestionarDivision'])->name('territorios.index');
         Route::post('/territorios/parroquia', [TerritorioController::class, 'storeParroquia'])->name('parroquia.store');
         Route::post('/territorios/recinto', [TerritorioController::class, 'storeRecinto'])->name('recinto.store');
         Route::post('/territorios/mesa', [TerritorioController::class, 'storeMesa'])->name('mesa.store');
         Route::post('/importar-datos-electorales', [ImportController::class, 'import'])->name('import.electoral');
-        // Ruta para procesar la creación de usuarios
-        Route::post('/generar-digitadores', [UserGenerationController::class, 'generarDigitadores'])->name('usuarios.generar');
-        // AQUÍ AGREGAMOS LA NUEVA RUTA PARA VER E IMPRIMIR
-        Route::get('/ver-digitadores', [UserGenerationController::class, 'verDigitadores'])->name('admin.ver.digitadores');
 
         Route::put('/recinto/{id}', [TerritorioController::class, 'updateRecinto'])->name('recinto.update');
         Route::delete('/recinto/{id}', [TerritorioController::class, 'destroyRecinto'])->name('recinto.destroy');

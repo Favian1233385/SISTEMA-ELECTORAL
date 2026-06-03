@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-bold text-2xl text-gray-800 leading-tight border-l-4 border-indigo-600 pl-4">
-            {{ __('Sistema de Control Electoral v1.0') }}
+            {{ __('Sistema de Control Electoral') }}
         </h2>
     </x-slot>
 
@@ -22,7 +22,8 @@
                     @endif
                 </p>
             </div>
-            {{-- NUEVO BLOQUE: ORIENTACIÓN TERRITORIAL Y DIGNIDAD --}}
+
+            {{-- ORIENTACIÓN TERRITORIAL Y DIGNIDAD --}}
             @if(Auth::user()->role === 'digitador')
             <div class="mb-8 bg-white border-l-8 border-emerald-500 rounded-2xl shadow-lg p-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -86,7 +87,7 @@
                     </div>
                 @endif
 
-                {{-- 3. NUEVO MÓDULO: CONFIGURACIÓN SAAS (Solo Admin General) --}}
+                {{-- 3. MÓDULO CONFIGURACIÓN SAAS (Solo Admin General) --}}
                 @if(Auth::user()->role === 'admin')
                     <div class="bg-white rounded-2xl shadow-lg border-2 border-indigo-600 p-6 transition-all duration-300 hover:shadow-indigo-200 hover:-translate-y-1 group relative overflow-hidden">
                         <div class="absolute top-0 right-0 p-2">
@@ -109,8 +110,8 @@
                     </div>
                 @endif
 
-                {{-- 4. MÓDULO DE ACTORES (Admin General y Administradores de Mando) --}}
-                @if(in_array(Auth::user()->role, ['admin', 'admin_provincial', 'admin_cantonal']))
+                {{-- 4. BLINDAJE INTERFAZ PANEL: Tarjeta de Gestión de Usuarios EXCLUSIVA para el Súper Administrador General --}}
+                @if(Auth::user()->role === 'admin')
                     <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 transition-all duration-300 hover:shadow-orange-100 hover:-translate-y-1 group">
                         <div class="flex items-center justify-between mb-4">
                             <div class="p-3 bg-orange-50 rounded-lg group-hover:bg-orange-600 transition">

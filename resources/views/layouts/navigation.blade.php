@@ -34,8 +34,8 @@
                         {{ __('Resultados') }}
                     </x-nav-link>
 
-                    {{-- NUEVO: Usuarios visible para todos los niveles de administración --}}
-                    @if(in_array(auth()->user()->role, ['admin', 'admin_provincial', 'admin_cantonal']))
+                    {{-- BLINDAJE INTERFAZ: Pestaña "Usuarios" EXCLUSIVA para el Súper Administrador General --}}
+                    @if(auth()->user()->role === 'admin')
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             {{ __('Usuarios') }}
                         </x-nav-link>
@@ -107,8 +107,8 @@
                 {{ __('Resultados') }}
             </x-responsive-nav-link>
 
-            {{-- NUEVO: Usuarios en responsive para administradores territoriales --}}
-            @if(in_array(auth()->user()->role, ['admin', 'admin_provincial', 'admin_cantonal']))
+            {{-- BLINDAJE INTERFAZ RESPONSIVE: Oculto para Administradores Provinciales y Cantonales --}}
+            @if(auth()->user()->role === 'admin')
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Usuarios') }}
                 </x-responsive-nav-link>

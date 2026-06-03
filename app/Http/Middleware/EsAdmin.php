@@ -20,12 +20,12 @@ class EsAdmin
 
         $role = Auth::user()->role;
 
-        // PERMITIMOS PASAR a los tres niveles de mando
-        if ($role === 'admin' || $role === 'admin_provincial' || $role === 'admin_cantonal') {
+        // RESTICCIÓN RIGUROSA: Solo el Súper Administrador general pasa a este bloque
+        if ($role === 'admin' || $role === 'admin_general') {
             return $next($request);
         }
 
-        // Si es digitador u otro, le mandamos el error que viste en la captura
-        abort(403, 'No tienes permiso para gestionar usuarios.');
+        // Si es provincial, cantonal, parroquial o digitador, se le deniega el acceso
+        abort(403, 'Acceso denegado: Este módulo es exclusivo del Súper Administrador del sistema.');
     }
 }
