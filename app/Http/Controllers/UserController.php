@@ -23,19 +23,24 @@ class UserController extends Controller
         $query = User::query();
 
         if ($auth->esAdminGeneral()) {
-            $users = $query->with(['provincia', 'canton', 'parroquia'])->get();
+            // EXCLUSIÓN GENERAL: Filtramos para que el SuperAdmin no vea digitadores automáticos
+            $users = $query->where('role', '!=', 'digitador')
+                           ->with(['provincia', 'canton', 'parroquia'])
+                           ->get();
         } 
         elseif ($auth->esAdminProvincial()) {
+            // EXCLUSIÓN PROVINCIAL: Añadimos 'digitador' al arreglo de roles prohibidos para este nivel
             $users = $query->where('provincia_id', $auth->provincia_id)
-                        ->whereNotIn('role', ['admin', 'admin_provincial']) 
-                        ->with(['canton', 'parroquia'])
-                        ->get();
+                           ->whereNotIn('role', ['admin', 'admin_provincial', 'digitador']) 
+                           ->with(['canton', 'parroquia'])
+                           ->get();
         } 
         elseif ($auth->esAdminCantonal()) {
+            // EXCLUSIÓN CANTONAL: Añadimos 'digitador' al arreglo de roles prohibidos para este nivel
             $users = $query->where('canton_id', $auth->canton_id)
-                        ->whereNotIn('role', ['admin', 'admin_provincial', 'admin_cantonal'])
-                        ->with(['parroquia'])
-                        ->get();
+                           ->whereNotIn('role', ['admin', 'admin_provincial', 'admin_cantonal', 'digitador'])
+                           ->with(['parroquia'])
+                           ->get();
         }
 
         return view('users.index', compact('users'));

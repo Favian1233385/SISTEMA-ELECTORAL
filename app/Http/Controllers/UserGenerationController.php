@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class UserGenerationController extends Controller
 {
@@ -17,7 +18,7 @@ class UserGenerationController extends Controller
      */
     public function generarDigitadores(Request $request)
     {
-        Log::info("Iniciando generación de digitadores", $request->all());
+        Log::info("Iniciando generación de digitadores en cascada", $request->all());
 
         $tipo = $request->input('tipo'); 
         $territorioId = $request->input('id');
@@ -31,12 +32,11 @@ class UserGenerationController extends Controller
             return back()->with('error', 'Debe seleccionar una dignidad.');
         }
 
-        // 2. Mapeo estricto: Las MESAS usan 'proceso_eleccion' ('generales'/'primarias')
-        // Los USUARIOS usan 'tipo_proceso' ('general'/'primaria') según tu MySQL Workbench
+        // 2. Mapeo estricto conforme a la Base de Datos
         $procesoMesa = ($procesoRequest === 'primarias') ? 'primarias' : 'generales';
         $procesoUser = ($procesoRequest === 'primarias') ? 'primaria' : 'general';
 
-        // Buscamos las mesas usando el campo de la tabla 'mesas'
+        // Buscamos las mesas usando el campo de la tabla 'mesas' con todas sus relaciones
         $query = Mesa::where('proceso_eleccion', $procesoMesa)->with(['recinto.parroquia.canton.provincia']);
 
         if ($tipo == 'provincia') {
@@ -69,40 +69,49 @@ class UserGenerationController extends Controller
         try {
             $creados = 0;
             foreach ($mesas as $mesa) {
-                if (!$mesa->recinto || !$mesa->recinto->parroquia) {
+                if (!$mesa->recinto || !$mesa->recinto->parroquia || !$mesa->recinto->parroquia->canton) {
                     continue; 
                 }
+
+                $recinto = $mesa->recinto;
+                $parroquia = $recinto->parroquia;
+                $canton = $parroquia->canton;
 
                 $dignidadSlug = Str::slug($dignidad);
                 $generoLetra = strtolower(substr($mesa->genero, 0, 1));
                 
-                // Si es primaria, el email será: m001-m-alcalde-primaria@sistema.com
+                // CORRECCIÓN CRÍTICA: Añadimos IDs geográficos en cascada al email para garantizar unicidad provincial
+                // Ejemplo: c1_p3_r14_m1-f-alcalde@sistema.com
                 $suffix = ($procesoUser === 'primaria') ? '-primaria' : '';
-                $username = "m" . $mesa->numero . "-" . $generoLetra . "-" . $dignidadSlug . $suffix;
+                $username = "c" . $canton->id . "_p" . $parroquia->id . "_r" . $recinto->id . "_m" . $mesa->numero . "-" . $generoLetra . "-" . $dignidadSlug . $suffix;
                 $email = $username . "@sistema.com";
 
                 $tagProceso = ($procesoUser === 'primaria') ? ' (Primarias)' : '';
 
+                // CORRECCIÓN CRÍTICA 2: Concatenamos el nombre del recinto en el campo 'name' para que se lea en las listas e impresiones
+                $nombreRecintoCorto = Str::limit($recinto->nombre, 25, '...');
+                $nombreDigitador = "Digitador " . ucfirst(strtolower($dignidad)) . " - " . $nombreRecintoCorto . " - M: " . $mesa->numero . " (" . substr($mesa->genero, 0, 3) . ")" . $tagProceso;
+
                 User::updateOrCreate(
                     ['email' => $email],
                     [
-                        'name'              => "Digitador " . ucfirst(strtolower($dignidad)) . " - Mesa " . $mesa->numero . " (" . $mesa->genero . ")" . $tagProceso,
+                        'name'              => $nombreDigitador,
                         'password'          => Hash::make('voto2026'), 
                         'role'              => 'digitador',
-                        'tipo_proceso'      => $procesoUser, // Usa exactamente el campo de tu fillable y BD
+                        'tipo_proceso'      => $procesoUser,
                         'mesa_id'           => $mesa->id,
                         'dignidad_asignada' => $dignidad,
-                        'provincia_id'      => $mesa->recinto->parroquia->canton->provincia_id ?? null,
-                        'canton_id'         => $mesa->recinto->parroquia->canton_id ?? null,
-                        'parroquia_id'      => $mesa->recinto->parroquia_id ?? null,
-                        'recinto_id'        => $mesa->recinto_id,
+                        'provincia_id'      => $canton->provincia_id ?? null,
+                        'canton_id'         => $canton->id ?? null,
+                        'parroquia_id'      => $parroquia->id ?? null,
+                        'recinto_id'        => $recinto->id,
                     ]
                 );
                 $creados++;
             }
 
             DB::commit();
-            return back()->with('success', "Se han generado $creados usuarios digitadores para el proceso de elecciones " . ($procesoUser === 'primaria' ? 'primarias.' : 'generales.'));
+            return back()->with('success', "Se han generado exitosamente $creados usuarios digitadores para el territorio de tipo [$tipo] en el proceso de elecciones " . ($procesoUser === 'primaria' ? 'primarias.' : 'generales.'));
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -110,7 +119,7 @@ class UserGenerationController extends Controller
                 'mensaje' => $e->getMessage(),
                 'linea' => $e->getLine()
             ]);
-            return back()->with('error', 'Error en asignación: ' . $e->getMessage());
+            return back()->with('error', 'Error en asignación masiva: ' . $e->getMessage());
         }
     }
 
@@ -151,7 +160,22 @@ class UserGenerationController extends Controller
 
     private function exportarPDF($digitadores, $tipo, $id, $dignidad)
     {
-        return "Generando PDF de " . ($dignidad ?? 'Todas las Dignidades') . " para el territorio $tipo ($id).";
+        if ($digitadores->isEmpty()) {
+            return back()->with('error', 'No hay datos disponibles para generar el reporte PDF.');
+        }
+
+        // Estructuramos un título dinámico para el encabezado del documento
+        $tituloReporte = "CREDENCIALES DE ACCESO - DIGITADORES";
+        $subtitulo = "Territorio: " . ucfirst($tipo) . " (ID: $id) | Dignidad: " . ($dignidad ?? 'TODAS');
+
+        // Cargamos la vista blade específica para el PDF pasándole las variables
+        $pdf = Pdf::loadView('admin.digitadores.pdf', compact('digitadores', 'tituloReporte', 'subtitulo'))
+                  ->setPaper('a4', 'portrait') // Configuración de hoja estándar para impresión
+                  ->setWarnings(false);
+
+        // Retorna el archivo directamente al navegador con un nombre limpio y estandarizado
+        $nombreArchivo = "credenciales_digitadores_" . ($tipo) . "_" . ($dignidad ?? 'todas') . ".pdf";
+        return $pdf->stream($nombreArchivo);
     }
 
     public function limpiarDigitadores()

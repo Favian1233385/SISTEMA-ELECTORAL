@@ -80,12 +80,16 @@
                                             <strong>Prov:</strong> {{ $user->mesa->recinto->parroquia->canton->provincia->nombre ?? 'N/A' }}<br>
                                             <strong>Cant:</strong> {{ $user->mesa->recinto->parroquia->canton->nombre ?? 'N/A' }}<br>
                                             <strong>Parr:</strong> {{ $user->mesa->recinto->parroquia->nombre ?? 'N/A' }}
+                                            <strong class="text-indigo-700">Recinto:</strong> <span class="font-semibold text-gray-900">{{ $user->mesa->recinto->nombre ?? 'N/A' }}</span>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4">
                                         <span class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
                                             #{{ $user->mesa->numero ?? 'N/A' }} ({{ $user->mesa->genero ?? '' }})
                                         </span>
+                                        @if($user->dignidad_asignada)
+                                            <br><span class="text-[10px] font-bold text-red-600 uppercase tracking-wider block mt-1">Dignidad: {{ $user->dignidad_asignada }}</span>
+                                        @endif
                                     </td>
                                     <td class="px-6 py-4 text-center">
                                         <span class="inline-flex items-center text-green-700 font-bold text-xs uppercase">
