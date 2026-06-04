@@ -5,49 +5,67 @@ namespace App\Http\Controllers;
 use App\Models\Candidato;
 use App\Models\Partido;
 use App\Models\Provincia;
-use App\Models\Canton;    // <--- AÑADE ESTA LÍNEA
-use App\Models\Parroquia; // <--- AÑADE ESTA LÍNEA
+use App\Models\Canton;    
+use App\Models\Parroquia; 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth; // <--- ESTA ES LA LÍNEA QUE FALTA
+use Illuminate\Support\Facades\Auth; 
 
 class CandidatoController extends Controller
 {
     /**
-     * Muestra la lista de candidatos inscritos.
+     * Muestra la lista de candidatos inscritos filtrados por proceso electoral.
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Candidato::with(['partido', 'provincia', 'canton', 'parroquia']);
+        
+        // Capturar el proceso actual (por defecto generales)
+        $proceso = $request->query('proceso', 'generales');
+        if (!in_array($proceso, ['generales', 'primarias'])) {
+            abort(404);
+        }
+
+        // Relación restrictiva: Solo candidatos cuyo partido político pertenezca al proceso seleccionado
+        $query = Candidato::with(['partido', 'provincia', 'canton', 'parroquia'])
+            ->whereHas('partido', function ($q) use ($proceso) {
+                $q->where('proceso_eleccion', $proceso);
+            });
 
         // --- FILTROS DE VISUALIZACIÓN POR ROL ---
         if ($user->esAdminGeneral()) {
-            // Ve absolutamente todo
+            // Ve absolutamente todo dentro del proceso seleccionado
         } elseif ($user->esAdminProvincial()) {
-            // Solo ve candidatos de su provincia
             $query->where('provincia_id', $user->provincia_id);
         } elseif ($user->esAdminCantonal()) {
-            // Solo ve candidatos de su cantón (Alcaldes y Concejales)
             $query->where('canton_id', $user->canton_id);
         } elseif ($user->esAdminParroquial()) {
-            // Solo ve candidatos de su parroquia (Vocales)
             $query->where('parroquia_id', $user->parroquia_id);
         }
 
         $candidatos = $query->orderBy('dignidad')->get();
-        return view('candidatos.index', compact('candidatos'));
+        
+        // Enviamos la variable $proceso a la vista para renderizar los Badges e interfaz dinámicamente
+        return view('candidatos.index', compact('candidatos', 'proceso'));
     }
 
     /**
-     * Formulario de inscripción con restricciones de Dignidad y Territorio.
+     * Formulario de inscripción con aislamiento de partidos por proceso.
      */
-    public function create()
+    public function create(Request $request)
     {
         $user = Auth::user();
-        $partidos = Partido::all();
         
-        // 1. Definir qué dignidades puede crear según su rango
+        // Capturar proceso para saber qué partidos y contexto mostrar
+        $proceso = $request->query('proceso', 'generales');
+        if (!in_array($proceso, ['generales', 'primarias'])) {
+            abort(404);
+        }
+
+        // FILTRO CRÍTICO: Solo partidos políticos que corresponden al proceso actual
+        $partidos = Partido::where('proceso_eleccion', $proceso)->get();
+        
+        // Definir qué dignidades puede crear según su rango
         $dignidadesDisponibles = [];
         if ($user->esAdminGeneral() || $user->esAdminProvincial()) {
             $dignidadesDisponibles = ['Prefecto' => 'Prefecto', 'Alcalde' => 'Alcalde', 'Concejal Urbano' => 'Concejal Urbano', 'Concejal Rural' => 'Concejal Rural', 'Vocal Parroquial' => 'Vocal Parroquial'];
@@ -57,7 +75,7 @@ class CandidatoController extends Controller
             $dignidadesDisponibles = ['Vocal Parroquial' => 'Vocal Parroquial'];
         }
 
-        // 2. Filtrar Provincias/Cantones/Parroquias para el formulario
+        // Filtrar Provincias/Cantones/Parroquias para el formulario
         $provincias = $user->esAdminGeneral() ? Provincia::all() : Provincia::where('id', $user->provincia_id)->get();
         $cantones = collect();
         $parroquias = collect();
@@ -69,18 +87,16 @@ class CandidatoController extends Controller
             $parroquias = Parroquia::where('id', $user->parroquia_id)->get();
         }
 
-        return view('candidatos.create', compact('partidos', 'provincias', 'dignidadesDisponibles', 'cantones', 'parroquias'));
+        return view('candidatos.create', compact('partidos', 'provincias', 'dignidadesDisponibles', 'cantones', 'parroquias', 'proceso'));
     }
 
     /**
-     * Almacena el candidato validando que el usuario no exceda sus permisos.
+     * Almacena el candidato resguardando la integridad del proceso.
      */
     public function store(Request $request)
     {
         $user = Auth::user();
 
-        // --- MEJORA: Si no es admin general, inyectamos su territorio al request 
-        // para que la validación no falle si el campo llega vacío desde la vista. ---
         if (!$user->esAdminGeneral()) {
             $request->merge([
                 'provincia_id' => $user->provincia_id,
@@ -89,7 +105,6 @@ class CandidatoController extends Controller
             ]);
         }
 
-        // Ahora la validación siempre pasará porque los IDs ya están en el $request
         $request->validate([
             'nombre'       => 'required|max:150',
             'partido_id'   => 'required|exists:partidos,id',
@@ -102,25 +117,27 @@ class CandidatoController extends Controller
 
         $datos = $request->all();
 
-        // --- SEGURIDAD: Forzar territorio según el usuario ---
-        if (!$user->esAdminGeneral()) {
-        // Si el usuario no tiene provincia_id, lanzamos un error claro antes de intentar guardar
-        if (!$user->provincia_id) {
-            return back()->withErrors('Tu usuario no tiene una provincia asignada. Contacta al SuperAdmin.');
-        }
+        // Obtener el partido para heredar automáticamente el flujo de redirección correcto
+        $partido = Partido::findOrFail($request->partido_id);
+        // Agregar el proceso electoral al array de datos para mantener la integridad referencial
+        $datos['tipo_proceso'] = $partido->proceso_eleccion;
 
-        $datos['provincia_id'] = $user->provincia_id;
+        // SEGURIDAD: Forzar territorio según el usuario
+        if (!$user->esAdminGeneral()) {
+            if (!$user->provincia_id) {
+                return back()->withErrors('Tu usuario no tiene una provincia asignada. Contacta al SuperAdmin.');
+            }
+
+            $datos['provincia_id'] = $user->provincia_id;
             
             if ($user->esAdminCantonal()) {
                 $datos['canton_id'] = $user->canton_id;
-                // Impedir que un cantonal cree prefectos
                 if ($datos['dignidad'] === 'Prefecto') return back()->withErrors('No tienes permiso para crear Prefectos.');
             }
             
             if ($user->esAdminParroquial()) {
                 $datos['canton_id'] = $user->canton_id;
                 $datos['parroquia_id'] = $user->parroquia_id;
-                // Solo puede crear vocales
                 if ($datos['dignidad'] !== 'Vocal Parroquial') return back()->withErrors('Solo puedes crear Vocales Parroquiales.');
             }
         }
@@ -138,21 +155,30 @@ class CandidatoController extends Controller
         }
 
         Candidato::create($datos);
-        return redirect()->route('candidatos.index')->with('success', 'Candidato inscrito correctamente.');
+        
+        // Redirección indexada al proceso del candidato guardado
+        return redirect()->route('candidatos.index', ['proceso' => $partido->proceso_eleccion])
+            ->with('success', 'Inscripción completada correctamente.');
     }
 
     /**
-     * Muestra el formulario de edición.
+     * Muestra el formulario de edición aislando el proceso correspondiente.
      */
     public function edit(Candidato $candidato)
     {
-        $partidos = Partido::all();
+        // Cargamos la relación para identificar el contexto del proceso
+        $candidato->load('partido');
+        $proceso = $candidato->partido->proceso_eleccion;
+
+        // Solo permitimos editar asociando partidos del mismo tipo de proceso
+        $partidos = Partido::where('proceso_eleccion', $proceso)->get();
         $provincias = Provincia::all();
-        return view('candidatos.edit', compact('candidato', 'partidos', 'provincias'));
+        
+        return view('candidatos.edit', compact('candidato', 'partidos', 'provincias', 'proceso'));
     }
 
     /**
-     * Actualiza los datos del candidato y gestiona la foto antigua.
+     * Actualiza los datos del candidato.
      */
     public function update(Request $request, Candidato $candidato)
     {
@@ -168,7 +194,7 @@ class CandidatoController extends Controller
 
         $datos = $request->all();
 
-        // --- LÓGICA DE LIMPIEZA DE JURISDICCIÓN ---
+        // Limpieza de jurisdicción según dignidad
         if ($datos['dignidad'] === 'Prefecto') {
             $datos['canton_id'] = null;
             $datos['parroquia_id'] = null;
@@ -176,27 +202,35 @@ class CandidatoController extends Controller
             $datos['parroquia_id'] = null;
         }
 
+        // Procesamiento de la fotografía
         if ($request->hasFile('foto')) {
-            // Eliminar foto antigua del disco para ahorrar espacio
             if ($candidato->foto) {
                 $oldPath = str_replace('/storage/', 'public/', $candidato->foto);
                 Storage::delete($oldPath);
             }
-            // Guardar la nueva foto
             $path = $request->file('foto')->store('public/candidatos');
             $datos['foto'] = Storage::url($path);
         }
 
-        $candidato->update($datos);
+        // OBTENEMOS EL PARTIDO PARA ASIGNAR EL PROCESO CORRECTO
+        $partido = Partido::findOrFail($request->partido_id);
+        $datos['tipo_proceso'] = $partido->proceso_eleccion;
 
-        return redirect()->route('candidatos.index')->with('success', 'Datos del candidato actualizados.');
+        // ACTUALIZAMOS EL CANDIDATO (Una sola vez, con todos los datos listos)
+        $candidato->update($datos);
+        
+        return redirect()->route('candidatos.index', ['proceso' => $partido->proceso_eleccion])
+            ->with('success', 'Datos del candidato actualizados.');
     }
 
     /**
-     * Elimina al candidato y su archivo de imagen del servidor.
+     * Elimina al candidato de la base de datos.
      */
     public function destroy(Candidato $candidato)
     {
+        $candidato->load('partido');
+        $procesoActual = $candidato->partido->proceso_eleccion;
+
         if ($candidato->foto) {
             $path = str_replace('/storage/', 'public/', $candidato->foto);
             Storage::delete($path);
@@ -204,17 +238,27 @@ class CandidatoController extends Controller
 
         $candidato->delete();
 
-        return redirect()->route('candidatos.index')->with('success', 'Inscripción eliminada correctamente.');
+        return redirect()->route('candidatos.index', ['proceso' => $procesoActual])
+            ->with('success', 'Inscripción eliminada correctamente.');
     }
+
     /**
-     * Obtiene los candidatos filtrados por dignidad y jurisdicción para el formulario de actas.
+     * Obtiene los candidatos filtrados por dignidad, jurisdicción y proceso para las actas.
      */
     public function getByDignidad(Request $request, $dignidad)
     {
         $user = auth()->user();
-        $query = Candidato::with('partido')->where('dignidad', $dignidad);
+        
+        // FILTRO CRÍTICO AJAX: Asegura que el acta consuma datos del proceso correspondiente (vía query string)
+        $proceso = $request->query('proceso', 'generales');
 
-        // Seguridad: Si no es admin, forzamos que solo busque en SU territorio
+        $query = Candidato::with('partido')
+            ->where('dignidad', $dignidad)
+            ->whereHas('partido', function ($q) use ($proceso) {
+                $q->where('proceso_eleccion', $proceso);
+            });
+
+        // Seguridad territorial de la consulta
         if (!$user->esAdmin()) {
             if ($user->parroquia_id) {
                 $query->where('parroquia_id', $user->parroquia_id);
@@ -222,7 +266,6 @@ class CandidatoController extends Controller
                 $query->where('canton_id', $user->canton_id);
             }
         } else {
-            // Si es admin, usa los filtros que vengan por Request (el comportamiento original)
             if ($request->has('provincia_id')) $query->where('provincia_id', $request->provincia_id);
             if ($request->has('canton_id')) $query->where('canton_id', $request->canton_id);
             if ($request->has('parroquia_id')) $query->where('parroquia_id', $request->parroquia_id);

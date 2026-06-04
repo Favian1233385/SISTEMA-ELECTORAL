@@ -13,6 +13,7 @@ class Candidato extends Model
         'partido_id',
         'dignidad',
         'nombre',
+        'tipo_proceso',
         'foto',
         'provincia_id',
         'canton_id',

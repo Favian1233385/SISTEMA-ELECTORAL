@@ -5,24 +5,43 @@ namespace App\Http\Controllers;
 use App\Models\Partido;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule; // REQUERIDO: Para la validación condicional única
 
 class PartidoController extends Controller
 {
     /**
-     * Muestra la lista de todos los movimientos políticos.
+     * Muestra la lista de movimientos políticos filtrados por proceso.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $partidos = Partido::all();
-        return view('partidos.index', compact('partidos'));
-    }
+        // Determinamos el proceso actual. Por defecto: generales
+        $proceso = $request->query('proceso', 'generales');
 
-    /**
+        // Validamos que el proceso sea estrictamente uno de los dos permitidos
+        if (!in_array($proceso, ['generales', 'primarias'])) {
+            abort(404);
+        }
+
+        // Filtramos la consulta directamente en la base de datos
+        $partidos = Partido::where('proceso_eleccion', $proceso)->get();
+
+        return view('partidos.index', compact('partidos', 'proceso'));
+    }
+       /**
      * Muestra el formulario para crear un nuevo partido.
      */
-    public function create()
+    public function create(Request $request)
     {
-        return view('partidos.create');
+        // 1. Capturamos el parámetro 'proceso' de la URL (?proceso=primarias). Si no existe, por defecto será 'generales'.
+        $proceso = $request->query('proceso', 'generales');
+
+        // 2. Validamos que el proceso sea estrictamente uno de los dos permitidos para evitar manipulaciones.
+        if (!in_array($proceso, ['generales', 'primarias'])) {
+            $proceso = 'generales';
+        }
+
+        // 3. Pasamos la variable $proceso a la vista partidos.create
+        return view('partidos.create', compact('proceso'));
     }
 
     /**
@@ -30,28 +49,34 @@ class PartidoController extends Controller
      */
     public function store(Request $request)
     {
-        // 1. Validar datos con rigor
+        // 1. Validar datos con rigor aislando el contexto por proceso_eleccion
         $request->validate([
-            'nombre' => 'required|unique:partidos,nombre|max:150',
+            'proceso_eleccion' => 'required|in:generales,primarias',
+            'nombre' => [
+                'required',
+                'max:150',
+                // El nombre solo es único dentro del mismo tipo de proceso electoral
+                Rule::unique('partidos')->where(function ($query) use ($request) {
+                    return $query->where('proceso_eleccion', $request->proceso_eleccion);
+                })
+            ],
             'lista'  => 'required|max:50',
-            'logo'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048', // Soporte para webp
+            'logo'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $datos = $request->all();
 
         // 2. Gestión de la imagen
         if ($request->hasFile('logo')) {
-            // Guardar en storage/app/public/logos
             $path = $request->file('logo')->store('public/logos');
-            // Guardar la URL amigable en la BD
             $datos['logo'] = Storage::url($path);
         }
 
         // 3. Crear registro
         Partido::create($datos);
 
-        return redirect()->route('partidos.index')
-            ->with('success', 'Movimiento Político registrado correctamente.');
+        return redirect()->route('partidos.index', ['proceso' => $request->proceso_eleccion])
+            ->with('success', 'Registro completado correctamente.');
     }
 
     /**
@@ -65,9 +90,16 @@ class PartidoController extends Controller
     /**
      * Muestra el formulario para editar un partido existente.
      */
+    /**
+     * Muestra el formulario para editar un partido existente.
+     */
     public function edit(Partido $partido)
     {
-        return view('partidos.edit', compact('partido'));
+        // Extraemos el proceso real que tiene grabado el partido en la base de datos
+        $proceso = $partido->proceso_eleccion;
+
+        // Pasamos tanto el partido como el proceso a la vista de edición
+        return view('partidos.edit', compact('partido', 'proceso'));
     }
 
     /**
@@ -76,7 +108,15 @@ class PartidoController extends Controller
     public function update(Request $request, Partido $partido)
     {
         $request->validate([
-            'nombre' => 'required|max:150|unique:partidos,nombre,' . $partido->id,
+            'proceso_eleccion' => 'required|in:generales,primarias',
+            'nombre' => [
+                'required',
+                'max:150',
+                // Ignora el ID actual pero valida que no choque con otro del mismo proceso
+                Rule::unique('partidos')->where(function ($query) use ($request) {
+                    return $query->where('proceso_eleccion', $request->proceso_eleccion);
+                })->ignore($partido->id)
+            ],
             'lista'  => 'required|max:50',
             'logo'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
@@ -84,7 +124,6 @@ class PartidoController extends Controller
         $datos = $request->all();
 
         if ($request->hasFile('logo')) {
-            // Eliminar el logo anterior si existe para no llenar el servidor de basura
             if ($partido->logo) {
                 $oldPath = str_replace('/storage/', 'public/', $partido->logo);
                 Storage::delete($oldPath);
@@ -96,8 +135,8 @@ class PartidoController extends Controller
 
         $partido->update($datos);
 
-        return redirect()->route('partidos.index')
-            ->with('success', 'Movimiento Político actualizado con éxito.');
+        return redirect()->route('partidos.index', ['proceso' => $partido->proceso_eleccion])
+            ->with('success', 'Registro actualizado con éxito.');
     }
 
     /**
@@ -105,16 +144,16 @@ class PartidoController extends Controller
      */
     public function destroy(Partido $partido)
     {
-        // 1. Eliminar archivo físico
+        $procesoActual = $partido->proceso_eleccion;
+
         if ($partido->logo) {
             $path = str_replace('/storage/', 'public/', $partido->logo);
             Storage::delete($path);
         }
 
-        // 2. Eliminar de la BD
         $partido->delete();
 
-        return redirect()->route('partidos.index')
-            ->with('success', 'Movimiento Político eliminado satisfactoriamente.');
+        return redirect()->route('partidos.index', ['proceso' => $procesoActual])
+            ->with('success', 'Registro eliminado satisfactoriamente.');
     }
 }

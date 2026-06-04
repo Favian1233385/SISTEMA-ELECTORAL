@@ -53,7 +53,17 @@
                                 <h3 class="text-lg font-bold text-indigo-700 border-b pb-2">Ubicación de la Dignidad</h3>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Provincia</label>
-                                    <select id="provincia_id" name="provincia_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    
+                                    {{-- 1. Si NO es Admin General, enviamos el ID oculto para no romper el Request --}}
+                                    @if(!auth()->user()->esAdminGeneral())
+                                        <input type="hidden" name="provincia_id" value="{{ $candidato->provincia_id }}">
+                                    @endif
+
+                                    {{-- 2. El select solo lleva el atributo name si es Admin General para evitar duplicados --}}
+                                    <select id="provincia_id" 
+                                            {{ auth()->user()->esAdminGeneral() ? 'name=provincia_id' : '' }} 
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50" 
+                                            {{ !auth()->user()->esAdminGeneral() ? 'disabled' : '' }}>
                                         @foreach($provincias as $prov)
                                             <option value="{{ $prov->id }}" {{ old('provincia_id', $candidato->provincia_id) == $prov->id ? 'selected' : '' }}>{{ $prov->nombre }}</option>
                                         @endforeach
@@ -77,7 +87,7 @@
                         </div>
 
                         <div class="mt-8 flex justify-end space-x-3">
-                            <a href="{{ route('candidatos.index') }}" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Cancelar</a>
+                            <a href="{{ route('candidatos.index', ['proceso' => $proceso]) }}" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Cancelar</a>
                             <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition shadow-lg">
                                 Guardar Cambios
                             </button>
@@ -92,6 +102,8 @@
         document.getElementById('provincia_id').addEventListener('change', function() {
             let provinciaId = this.value;
             let cantonSelect = document.getElementById('canton_id');
+            let parroquiaSelect = document.getElementById('parroquia_id'); 
+            parroquiaSelect.innerHTML = '<option value="">Seleccione Parroquia...</option>'; 
             if (provinciaId) {
                 fetch(`/api/cantones/${provinciaId}`)
                     .then(res => res.json())

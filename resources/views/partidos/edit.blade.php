@@ -12,7 +12,7 @@
                 <form action="{{ route('partidos.update', $partido) }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     @method('PUT') {{-- Fundamental para que Laravel sepa que es una actualización --}}
-                    
+                    <input type="hidden" name="proceso_eleccion" value="{{ old('proceso_eleccion', $partido->proceso_eleccion) }}">
                     <div class="space-y-6">
                         <div>
                             <x-input-label for="nombre" :value="__('Nombre del Movimiento')" />
@@ -37,7 +37,7 @@
                     </div>
 
                     <div class="flex items-center justify-end mt-8 border-t pt-4">
-                        <a href="{{ route('partidos.index') }}" class="text-sm text-gray-600 hover:underline mr-6">Cancelar y volver</a>
+                        <a href="{{ route('partidos.index', ['proceso' => $partido->proceso_eleccion]) }}" class="text-sm text-gray-600 hover:underline mr-6">Cancelar y volver</a>
                         <x-primary-button class="bg-indigo-600 hover:bg-indigo-700">
                             {{ __('Actualizar Cambios') }}
                         </x-primary-button>
