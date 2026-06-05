@@ -88,26 +88,33 @@ class ResultadoController extends Controller
         });
 
         // Sumatoria atómica de votos aislando el proceso correspondiente por su ID extranjero
-       $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $recintoFiltro, $mesaFiltro, $user, $procesoActual) {
-                $query->where('actas.proceso_electoral_id', '=', $procesoActual->id) 
-                    ->when($user->role === 'admin_provincial', function($q) use ($user) {
-                        $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
-                    })
-                    ->when($finalCantonId, function($q) use ($finalCantonId) {
-                        $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
-                    })
-                    ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
-                        $q->whereHas('mesa.recinto', fn($r) => $r->where('parroquia_id', $finalParroquiaId));
-                    })
-                    ->when($recintoFiltro, function($q) use ($recintoFiltro) {
-                        $q->whereHas('mesa', fn($m) => $m->where('recinto_id', $recintoFiltro));
-                    })
-                    ->when($mesaFiltro, function($q) use ($mesaFiltro) {
-                        $q->where('actas.mesa_id', $mesaFiltro);
-                    });
-            }], 'acta_candidato.votos')
-            ->orderByDesc('total_votos')
-            ->get();
+        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $recintoFiltro, $mesaFiltro, $user, $procesoActual) {
+                    $query->where('actas.proceso_electoral_id', '=', $procesoActual->id) 
+                        ->when($user->role === 'admin_provincial', function($q) use ($user) {
+                            $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
+                        })
+                        ->when($finalCantonId, function($q) use ($finalCantonId) {
+                            $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
+                        })
+                        ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
+                            $q->whereHas('mesa.recinto', fn($r) => $r->where('parroquia_id', $finalParroquiaId));
+                        })
+                        ->when($recintoFiltro, function($q) use ($recintoFiltro) {
+                            $q->whereHas('mesa', fn($m) => $m->where('recinto_id', $recintoFiltro));
+                        })
+                        ->when($mesaFiltro, function($q) use ($mesaFiltro) {
+                            $q->where('actas.mesa_id', $mesaFiltro);
+                        });
+                }], 'acta_candidato.votos')
+                ->get()
+                ->map(function($candidato) {
+                    // Saneamiento de datos: Si el sub-select retorna null, forzamos un entero 0
+                    $candidato->total_votos = (int)($candidato->total_votos ?? 0);
+                    return $candidato;
+                })
+                // Ordenamos la colección de forma segura en memoria para evitar inconsistencias de ordenamiento de nulos en SQL
+                ->sortByDesc('total_votos')
+                ->values();
             
         // 5. Cálculo de Totales y ESCRUTINIO REAL basado en el ID del proceso
         $totales = Acta::where('proceso_electoral_id', '=', $procesoActual->id)
@@ -304,6 +311,7 @@ class ResultadoController extends Controller
             return $q;
         });
 
+        // Reemplazo seguro para la consulta en generarPDF:
         $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user, $procesoActual) {
                 $query->where('actas.proceso_electoral_id', '=', $procesoActual->id)
                     ->when($user->role === 'admin_provincial', function($q) use ($user) {
@@ -316,8 +324,13 @@ class ResultadoController extends Controller
                         $q->whereHas('mesa.recinto', fn($r) => $r->where('parroquia_id', $finalParroquiaId));
                     });
             }], 'acta_candidato.votos')
-            ->orderByDesc('total_votos')
-            ->get();
+            ->get()
+            ->map(function($candidato) {
+                $candidato->total_votos = (int)($candidato->total_votos ?? 0);
+                return $candidato;
+            })
+            ->sortByDesc('total_votos')
+            ->values();
 
         $totales = Acta::where('proceso_electoral_id', '=', $procesoActual->id)
             ->where('dignidad', '=', (string) $dignidadSeleccionada)

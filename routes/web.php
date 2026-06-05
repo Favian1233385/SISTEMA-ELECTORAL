@@ -77,6 +77,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['auth', 'EsAdmin'])->group(function () {
         
         Route::resource('procesos', ProcesoElectoralController::class)->only(['index', 'store', 'update']);
+        // Ruta Blindada para la Limpieza Quirúrgica de Simulaciones por Proceso
+        Route::post('/procesos/{proceso}/limpiar-pruebas', [ProcesoElectoralController::class, 'limpiarPruebas'])
+            ->name('procesos.limpiarPruebas');
         // Gestión de Usuarios (CRUD Completo y Blindado para Súper Admin)
         Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
         Route::get('/usuarios/crear', [UserController::class, 'create'])->name('users.create');
