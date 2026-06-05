@@ -34,10 +34,14 @@
                         {{ __('Resultados') }}
                     </x-nav-link>
 
-                    {{-- BLINDAJE INTERFAZ: Pestaña "Usuarios" EXCLUSIVA para el Súper Administrador General --}}
+                    {{-- BLINDAJE INTERFAZ: Pestañas EXCLUSIVAS para el Súper Administrador General --}}
                     @if(auth()->user()->role === 'admin')
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             {{ __('Usuarios') }}
+                        </x-nav-link>
+                        <!-- PUNTO DE INSERCIÓN 1: Menú de Escritorio -->
+                        <x-nav-link :href="route('procesos.index')" :active="request()->routeIs('procesos.*')">
+                            {{ __('Periodos Electorales') }}
                         </x-nav-link>
                     @endif
                 </div>
@@ -111,6 +115,10 @@
             @if(auth()->user()->role === 'admin')
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     {{ __('Usuarios') }}
+                </x-responsive-nav-link>
+                <!-- PUNTO DE INSERCIÓN 2: Menú Móvil -->
+                <x-responsive-nav-link :href="route('procesos.index')" :active="request()->routeIs('procesos.*')">
+                    {{ __('Periodos Electorales') }}
                 </x-responsive-nav-link>
             @endif
         </div>

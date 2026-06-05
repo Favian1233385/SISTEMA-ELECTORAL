@@ -47,4 +47,8 @@ class Acta extends Model
         // El acta pertenece a una mesa, y la mesa pertenece a un recinto
         return $this->mesa->recinto(); 
     }
+    public function procesoElectoral()
+    {
+        return $this->belongsTo(ProcesoElectoral::class, 'proceso_electoral_id');
+    }
 }

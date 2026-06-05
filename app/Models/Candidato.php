@@ -17,7 +17,8 @@ class Candidato extends Model
         'foto',
         'provincia_id',
         'canton_id',
-        'parroquia_id'
+        'parroquia_id',
+        'proceso_electoral_id',
     ];
 
     // Relación con el Partido (Ya la tenías, es correcta)
@@ -49,5 +50,12 @@ class Candidato extends Model
         return $this->belongsToMany(Acta::class, 'acta_candidato')
                     ->withPivot('votos')
                     ->withTimestamps();
+    }
+    /**
+     * Relación con el Periodo Electoral al que pertenece la postulación.
+     */
+    public function procesoElectoral()
+    {
+        return $this->belongsTo(ProcesoElectoral::class, 'proceso_electoral_id');
     }
 }

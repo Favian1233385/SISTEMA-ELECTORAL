@@ -1,8 +1,8 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+            <!-- Título del Módulo e Indicador EN VIVO -->
             <div class="flex items-center">
-                {{-- Indicador Pulsante EN VIVO --}}
                 <div class="flex items-center bg-red-600 px-3 py-1 rounded-lg mr-4 shadow-[0_0_10px_rgba(220,38,38,0.5)]">
                     <span class="relative flex h-3 w-3 mr-2">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -11,62 +11,53 @@
                     <span class="text-white text-xs font-black uppercase tracking-widest">En Vivo</span>
                 </div>
                 
-                <h2 class="font-black text-2xl text-gray-800 dark:text-gray-200 leading-tight border-l-2 border-gray-300 dark:border-gray-700 pl-4">
+                <h2 class="font-black text-2xl text-gray-800 dark:text-gray-200 leading-tight">
                     {{ __('Resultados') }}: <span class="text-blue-600 dark:text-blue-400">{{ is_array($dignidadSeleccionada) ? 'General' : $dignidadSeleccionada }}</span>
                 </h2>
             </div>
-            <!-- SELECTOR DE PROCESO ELECTORAL DINÁMICO -->
-            <div class="mb-6 flex flex-wrap justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                <div class="flex items-center space-x-3">
-                    <label for="proceso" class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Contexto Electoral:</label>
-                    <form id="formProceso" method="GET" action="{{ route('resultados.index') }}" class="inline-block">
-                        <!-- Mantenemos los filtros actuales para no perder la navegación geográfica del usuario -->
-                        <input type="hidden" name="dignidad" value="{{ $dignidadSeleccionada }}">
-                        @if(request('canton_id')) <input type="hidden" name="canton_id" value="{{ request('canton_id') }}"> @endif
-                        @if(request('parroquia_id')) <input type="hidden" name="parroquia_id" value="{{ request('parroquia_id') }}"> @endif
 
-                        <select name="proceso" id="proceso" onchange="document.getElementById('formProceso').submit();" 
-                            class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium text-gray-800 bg-gray-50 px-3 py-1.5 cursor-pointer hover:bg-gray-100 transition ease-in-out duration-150">
-                            <option value="generales" {{ $proceso === 'generales' ? 'selected' : '' }}>🗳️ Elecciones Generales</option>
-                            <option value="primarias" {{ $proceso === 'primarias' ? 'selected' : '' }}>🛡️ Elecciones Primarias</option>
-                        </select>
-                    </form>
+            <!-- Selector Único de Proceso y Botón de Exportación -->
+            <form id="formProceso" method="GET" action="{{ route('resultados.index') }}" class="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="dignidad" value="{{ is_array($dignidadSeleccionada) ? '' : $dignidadSeleccionada }}">
+                <input type="hidden" name="canton_id" value="{{ request('canton_id') }}">
+                <input type="hidden" name="parroquia_id" value="{{ request('parroquia_id') }}">
+                <input type="hidden" name="recinto_id" value="{{ request('recinto_id') }}">
+                <input type="hidden" name="mesa_id" value="{{ request('mesa_id') }}">
+
+                <div class="flex items-center space-x-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <label for="proceso_id" class="text-[10px] font-black text-gray-400 uppercase tracking-wider">Proceso:</label>
+                    <select name="proceso_id" id="proceso_id" onchange="document.getElementById('formProceso').submit();" 
+                        class="border-none bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 p-0 pr-6 focus:ring-0 cursor-pointer">
+                        @foreach($historicos as $proc)
+                            <option value="{{ $proc->id }}" {{ $proceso->id == $proc->id ? 'selected' : '' }}>
+                                {{ $proc->nombre }} ({{ $proc->anio }})
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
 
-                <!-- Indicador de estado del proceso actual -->
-                <div class="text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider {{ $proceso === 'generales' ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-purple-100 text-purple-800 border border-purple-200' }}">
-                    Visualizando: {{ $proceso }}
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                {{-- Botón de Reporte PDF --}}
-                <a href="{{ route('resultados.pdf', [
-                    'dignidad' => is_array($dignidadSeleccionada) ? '' : $dignidadSeleccionada,
-                    'canton_id' => request('canton_id'),
-                    'parroquia_id' => request('parroquia_id')
-                ]) }}" 
-                target="_blank" 
-                class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg font-bold text-xs text-gray-700 dark:text-gray-200 uppercase hover:bg-red-50 dark:hover:bg-red-900/20 transition shadow-sm">
+                <a href="{{ route('resultados.pdf', ['proceso_id' => $proceso->id, 'dignidad' => (string) $dignidadSeleccionada, 'canton_id' => request('canton_id'), 'parroquia_id' => request('parroquia_id'), 'recinto_id' => request('recinto_id'), 'mesa_id' => request('mesa_id')]) }}" 
+                   target="_blank" 
+                   class="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl font-bold text-xs text-gray-700 dark:text-gray-200 uppercase hover:bg-gray-50 dark:hover:bg-gray-700 transition shadow-sm">
                     <svg class="w-4 h-4 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z" />
-                        <path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
                     </svg>
                     Exportar PDF
                 </a>
-            </div>
+            </form>
         </div>
     </x-slot>
 
-    <div class="py-6 bg-blue-50/30 dark:bg-gray-900 min-h-screen">
+    <div class="py-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             
-            {{-- Tabs de Dignidades --}}
+            {{-- Tabs de Dignidades Electorales (Limpio, sin código roto) --}}
             <div class="mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
                 <ul class="flex flex-nowrap -mb-px text-sm font-medium text-center text-gray-500 dark:text-gray-400">
                     @foreach($pestanasVisibles as $pestana)
                         <li class="me-2">
-                            <a href="{{ route('resultados.index', ['dignidad' => $pestana, 'canton_id' => request('canton_id'), 'parroquia_id' => request('parroquia_id')]) }}" 
-                               class="inline-flex p-4 border-b-2 rounded-t-lg transition-all {{ $dignidadSeleccionada === $pestana ? 'text-blue-600 border-blue-600 font-bold bg-blue-50/50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-400' : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300' }}">
+                            <a href="{{ route('resultados.index', ['proceso_id' => $proceso->id, 'dignidad' => $pestana, 'canton_id' => request('canton_id'), 'parroquia_id' => request('parroquia_id'), 'recinto_id' => request('recinto_id'), 'mesa_id' => request('mesa_id')]) }}" 
+                               class="inline-flex p-4 border-b-2 rounded-t-lg transition-all {{ $dignidadSeleccionada === $pestana ? 'text-blue-600 border-blue-600 font-bold bg-white dark:bg-gray-800 shadow-sm' : 'border-transparent hover:text-gray-600 hover:border-gray-300' }}">
                                 {{ $pestana }}
                             </a>
                         </li>
@@ -74,128 +65,165 @@
                 </ul>
             </div>
 
-            {{-- Filtros y Progreso --}}
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <form action="{{ route('resultados.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                        <input type="hidden" name="dignidad" value="{{ is_array($dignidadSeleccionada) ? '' : $dignidadSeleccionada }}">
+            <!-- FILA DE JURISDICCIÓN EN CASCADA COMPLETA Y ESCRUTINIO GLOBAL -->       
+            <form id="formFiltrosJurisdiccion" method="GET" action="{{ route('resultados.index') }}" class="w-full mb-6">
+                <input type="hidden" name="proceso_id" value="{{ $proceso->id }}">
+                <input type="hidden" name="dignidad" value="{{ is_array($dignidadSeleccionada) ? '' : $dignidadSeleccionada }}">
+
+                <div class="flex flex-col gap-4">
+                    
+                    <!-- 1. Tarjeta de Jurisdicción Territorial Estrictamente Horizontal -->
+                    <div class="w-full bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <p class="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Jurisdicción Territorial</p>
                         
-                        <div class="flex flex-col h-full justify-end">
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 mb-1 ml-1 leading-tight">
-                                Jurisdicción Cantonal
-                            </label>
-                            <select name="canton_id" onchange="this.form.submit()" class="w-full h-10 rounded-lg border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-blue-500 py-1">
-                                <option value="">Toda la Provincia</option>
-                                @foreach($cantones as $canton)
-                                    <option value="{{ $canton->id }}" {{ request('canton_id') == $canton->id ? 'selected' : '' }}>{{ $canton->nombre }}</option>
-                                @endforeach
-                            </select>
+                        <!-- Grid forzado a 4 columnas horizontales a partir de pantallas pequeñas -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Cantón -->
+                            <div>
+                                <label for="canton_id" class="block text-[9px] font-bold text-gray-400 uppercase mb-1">Cantón</label>
+                                <select name="canton_id" id="canton_id" onchange="document.getElementById('formFiltrosJurisdiccion').submit();" 
+                                    class="w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-200 py-1.5 focus:ring-blue-500">
+                                    <option value="">Toda la Provincia</option>
+                                    @foreach($cantones as $canton)
+                                        <option value="{{ $canton->id }}" {{ request('canton_id') == $canton->id ? 'selected' : '' }}>{{ $canton->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Parroquia -->
+                            <div>
+                                <label for="parroquia_id" class="block text-[9px] font-bold text-gray-400 uppercase mb-1">Parroquia / Zona</label>
+                                <select name="parroquia_id" id="parroquia_id" onchange="document.getElementById('formFiltrosJurisdiccion').submit();" 
+                                    class="w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-200 py-1.5 focus:ring-blue-500"
+                                    {{ !request('canton_id') ? 'disabled' : '' }}>
+                                    <option value="">Todas las Parroquias</option>
+                                    @foreach($parroquias as $parroquia)
+                                        <option value="{{ $parroquia->id }}" {{ request('parroquia_id') == $parroquia->id ? 'selected' : '' }}>{{ $parroquia->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Recinto -->
+                            <div>
+                                <label for="recinto_id" class="block text-[9px] font-bold text-gray-400 uppercase mb-1">Recinto Electoral</label>
+                                <select name="recinto_id" id="recinto_id" onchange="document.getElementById('formFiltrosJurisdiccion').submit();" 
+                                    class="w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-200 py-1.5 focus:ring-blue-500"
+                                    {{ !request('parroquia_id') ? 'disabled' : '' }}>
+                                    <option value="">Todos los Recintos</option>
+                                    @isset($recintos)
+                                        @foreach($recintos as $recinto)
+                                            <option value="{{ $recinto->id }}" {{ request('recinto_id') == $recinto->id ? 'selected' : '' }}>🏫 {{ $recinto->nombre }}</option>
+                                        @endforeach
+                                    @endisset
+                                </select>
+                            </div>
+
+                            <!-- Mesa / Junta -->
+                            <div>
+                                <label for="mesa_id" class="block text-[9px] font-bold text-gray-400 uppercase mb-1">Mesa / Junta</label>
+                                <select name="mesa_id" id="mesa_id" onchange="document.getElementById('formFiltrosJurisdiccion').submit();" 
+                                    class="w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs font-bold text-gray-700 dark:text-gray-200 py-1.5 focus:ring-blue-500"
+                                    {{ !request('recinto_id') ? 'disabled' : '' }}>
+                                    <option value="">Todas las Mesas</option>
+                                    @isset($mesas)
+                                        @foreach($mesas as $mesa)
+                                            <option value="{{ $mesa->id }}" {{ request('mesa_id') == $mesa->id ? 'selected' : '' }}>📋 Nº {{ $mesa->numero }} ({{ $mesa->genero }})</option>
+                                        @endforeach
+                                    @endisset
+                                </select>
+                            </div>
                         </div>
+                    </div>
 
-                        <div class="flex flex-col h-full justify-end">
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 mb-1 ml-1 leading-tight">
-                                Parroquia / Zona
-                            </label>
-                            <select name="parroquia_id" onchange="this.form.submit()" class="w-full h-10 rounded-lg border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-blue-500 py-1">
-                                <option value="">Todas las Parroquias</option>
-                                @foreach($parroquias as $parroquia)
-                                    <option value="{{ $parroquia->id }}" {{ request('parroquia_id') == $parroquia->id ? 'selected' : '' }}>{{ $parroquia->nombre }}</option>
-                                @endforeach
-                            </select>
+                    <!-- 2. Bloque de Escrutinio Global (Con salto de línea, optimizado y compacto) -->
+                    <div class="w-full bg-white dark:bg-gray-800 px-5 py-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider">Escrutinio Global:</span>
+                            <span class="text-base font-black text-blue-600 dark:text-blue-400">{{ $porcentajeEscrutinio }}%</span>
                         </div>
-                    </form>
-                </div>
-
-                {{-- Corregido text-black a text-white debido al fondo oscuro --}}
-                <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-xl shadow-lg text-black dark:text-white border border-blue-700">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs font-bold uppercase opacity-80 italic">Escrutinio Global</span>
-                        <span class="text-lg font-black">{{ $porcentajeEscrutinio }}%</span>
+                        
+                        <!-- Barra de progreso horizontal fluida -->
+                        <div class="flex-1 max-w-xl bg-gray-100 dark:bg-gray-700 rounded-full h-3 relative">
+                            <div class="bg-blue-600 h-3 rounded-full shadow-sm transition-all duration-500" style="width: {{ $porcentajeEscrutinio }}%"></div>
+                        </div>
+                        
+                        <p class="text-[10px] text-gray-400 dark:text-gray-500 italic mt-1 sm:mt-0">* Datos basados en actas ingresadas de esta demarcación.</p>
                     </div>
-                    <div class="w-full bg-blue-900/40 rounded-full h-3 mb-2">
-                        <div class="bg-white h-3 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]" 
-                             style="width: {{ $porcentajeEscrutinio }}%"></div>
-                    </div>
-                    <p class="text-[10px] italic opacity-70">* Datos basados en actas ingresadas.</p>
-                </div>
-            </div>
 
-            {{-- Sección del Gráfico --}}
-            <div class="w-full bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
+                </div>
+            </form>
+
+            {{-- Sección de Tendencia de Votación Profesional --}}
+            <div class="w-full bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 mb-6">
                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-gray-800 dark:text-white uppercase tracking-wider italic">
-                        <span class="text-blue-600 dark:text-blue-400">|</span> Tendencia de Votación
+                    <h3 class="text-base font-black text-gray-800 dark:text-white uppercase tracking-wider">
+                        | Tendencia de Votación
                     </h3>
-                    <span class="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-bold uppercase">Cifras en Votos</span>
+                    <span class="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Cifras en Votos</span>
                 </div>
-                <div class="h-[400px] w-full">
+                <div class="h-[380px] w-full">
                     <canvas id="chartResultados"></canvas>
                 </div>
             </div>
 
-            {{-- Cards de Resumen en Fila Horizontal --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="bg-blue-600 p-5 rounded-2xl shadow-md transform hover:scale-105 transition-all text-white">
-                    <p class="text-[11px] uppercase font-black opacity-80">Votos Válidos</p>
-                    <p class="text-3xl font-black tracking-tighter">{{ number_format($granTotalVotos) }}</p>
+            {{-- Cards de Resumen Estadístico Uniformes --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-600 p-5 rounded-2xl shadow-sm text-white">
+                    <p class="text-[10px] uppercase font-bold opacity-80 tracking-wider">Votos Válidos</p>
+                    <p class="text-3xl font-black tracking-tight mt-1">{{ number_format($granTotalVotos) }}</p>
                 </div>
-
-                {{-- Corregido text-black a text-white para asegurar consistencia --}}
-                <div class="bg-emerald-500 p-5 rounded-2xl shadow-md transform hover:scale-105 transition-all text-black dark:text-white">
-                    <p class="text-[11px] uppercase font-black opacity-80">Actas Procesadas</p>
-                    <p class="text-3xl font-black tracking-tighter">{{ $totalActas }}</p>
+                <div class="bg-emerald-500 p-5 rounded-2xl shadow-sm text-white">
+                    <p class="text-[10px] uppercase font-bold opacity-80 tracking-wider">Actas Procesadas</p>
+                    <p class="text-3xl font-black tracking-tight mt-1">{{ $totalActas }}</p>
                 </div>
-
-                {{-- Corregido clase text-blue-600-400 errónea y corregido dark:text-black a dark:text-white --}}
-                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-md border-2 border-gray-100 dark:border-gray-700 transform hover:scale-105 transition-all">
-                    <p class="text-[11px] text-blue-600 dark:text-blue-400 uppercase font-black">Votos Blancos</p>
-                    <p class="text-3xl font-black text-gray-800 dark:text-white tracking-tighter">{{ number_format($totalVotosBlancos) }}</p>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider">Votos Blancos</p>
+                    <p class="text-3xl font-black text-gray-800 dark:text-white tracking-tight mt-1">{{ number_format($totalVotosBlancos) }}</p>
                 </div>
-
-                <div class="bg-red-50 dark:bg-red-900/20 p-5 rounded-2xl shadow-md border-2 border-red-200 dark:border-red-900/50 transform hover:scale-105 transition-all">
-                    <p class="text-[11px] text-red-500 dark:text-red-400 uppercase font-black">Votos Nulos</p>
-                    <p class="text-3xl font-black text-red-600 dark:text-red-400 tracking-tighter">{{ number_format($totalVotosNulos) }}</p>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider">Votos Nulos</p>
+                    <p class="text-3xl font-black text-gray-800 dark:text-white tracking-tight mt-1">{{ number_format($totalVotosNulos) }}</p>
                 </div>
             </div>
 
-            {{-- Tabla de Posiciones --}}
+            {{-- Tabla de Posiciones de Candidatos --}}
             <div class="bg-white dark:bg-gray-800 shadow-sm rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
                 <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-50 dark:bg-gray-700/50 text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">
+                    <thead class="bg-gray-50 dark:bg-gray-700/50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                         <tr>
                             <th class="px-6 py-4">Ranking / Candidato</th>
-                            <th class="px-6 py-4">Organización</th>
+                            <th class="px-6 py-4">Organización Política</th>
                             <th class="px-6 py-4 text-right">Votos</th>
                             <th class="px-6 py-4 text-right">Porcentaje</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                         @forelse($resultados as $index => $candidato)
-                            <tr class="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors text-gray-700 dark:text-gray-300">
+                            <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors text-gray-700 dark:text-gray-300">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center">
-                                        <span class="w-6 h-6 rounded-full {{ $index == 0 ? 'bg-yellow-400 text-black' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' }} flex items-center justify-center text-[10px] font-bold mr-3">
+                                        <span class="w-6 h-6 rounded-full {{ $index == 0 ? 'bg-yellow-400 text-black' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' }} flex items-center justify-center text-[10px] font-bold mr-3">
                                             {{ $index + 1 }}
                                         </span>
-                                        <a href="{{ route('resultados.detalle', ['candidato' => $candidato->id, 'canton_id' => request('canton_id'), 'parroquia_id' => request('parroquia_id')]) }}" class="font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                        <a href="{{ route('resultados.detalle', ['candidato' => $candidato->id, 'canton_id' => request('canton_id'), 'parroquia_id' => request('parroquia_id'), 'recinto_id' => request('recinto_id'), 'mesa_id' => request('mesa_id'), 'proceso_id' => $proceso->id]) }}" class="font-bold text-blue-600 dark:text-blue-400 hover:underline">
                                             {{ $candidato->nombre }}
                                         </a>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 text-xs italic">{{ $candidato->partido->nombre ?? 'Alianza' }}</td>
+                                <td class="px-6 py-4 text-xs italic text-gray-500 dark:text-gray-400">{{ $candidato->partido->nombre ?? 'Alianza' }}</td>
                                 <td class="px-6 py-4 text-right font-mono font-bold">{{ number_format($candidato->total_votos) }}</td>
                                 <td class="px-6 py-4">
                                     @php $porc = $granTotalVotos > 0 ? ($candidato->total_votos / $granTotalVotos) * 100 : 0; @endphp
                                     <div class="flex items-center justify-end">
-                                        <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mr-3 hidden md:block">
-                                            <div class="bg-blue-600 dark:bg-blue-500 h-1.5 rounded-full" style="width: {{ $porc }}%"></div>
+                                        <div class="w-24 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mr-3 hidden md:block">
+                                            <div class="bg-blue-600 h-1.5 rounded-full" style="width: {{ $porc }}%"></div>
                                         </div>
-                                        <span class="font-bold text-blue-700 dark:text-blue-400">{{ number_format($porc, 2) }}%</span>
+                                        <span class="font-bold text-gray-900 dark:text-white">{{ number_format($porc, 2) }}%</span>
                                     </div>
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="p-10 text-center text-gray-400 dark:text-gray-500 italic">No hay datos disponibles.</td></tr>
+                            <tr><td colspan="4" class="p-10 text-center text-gray-400 dark:text-gray-500 italic">No hay actas o datos escrutados en esta demarcación.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -203,25 +231,34 @@
         </div>
     </div>
 
-    {{-- Script para el Gráfico Profesional --}}
+    {{-- Inicialización del Gráfico con Chart.js --}}   
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const ctx = document.getElementById('chartResultados').getContext('2d');
-            
-            // Detecta si el entorno está en modo oscuro para ajustar los colores de las fuentes
             const isDark = document.documentElement.classList.contains('dark');
             const textColor = isDark ? '#9ca3af' : '#4b5563';
+
+            const etiquetasCandidatos = {!! json_encode($resultados->pluck('nombre')->toArray()) !!};
+            const datosVotos = {!! json_encode($resultados->pluck('total_votos')->map(fn($v) => (int)($v ?? 0))->toArray()) !!};
+
+            if (etiquetasCandidatos.length === 0) {
+                ctx.font = "14px sans-serif";
+                ctx.fillStyle = textColor;
+                ctx.textAlign = "center";
+                ctx.fillText("Sin tendencias disponibles para esta jurisdicción.", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
 
             new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: {!! json_encode($resultados->pluck('nombre')) !!},
+                    labels: etiquetasCandidatos,
                     datasets: [{
                         label: 'Votos',
-                        data: {!! json_encode($resultados->pluck('total_votos')) !!},
-                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6b7280'],
-                        borderRadius: 8,
+                        data: datosVotos,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                        borderRadius: 6,
                         borderSkipped: false,
                     }]
                 },
@@ -229,37 +266,20 @@
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: {
-                        padding: { left: 10, right: 30 }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: textColor, font: { size: 10 } } 
-                        },
-                        y: { 
-                            grid: { display: false }, 
-                            ticks: { 
-                                color: textColor,
-                                font: { size: 12, weight: 'bold' },
-                                autoSkip: false
-                            } 
-                        }
+                        x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
+                        y: { grid: { display: false }, ticks: { color: textColor, font: { size: 12, weight: 'bold' } } }
                     }
                 }
             });
         });
     </script>
 
-    {{-- Script para Actualización Automática Real --}}
+    {{-- Auto-recarga automática cada 30 segundos --}}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
-                window.location.reload();
-            }, 30000); 
+            setTimeout(function() { window.location.reload(); }, 30000); 
         });
     </script>
 </x-app-layout>

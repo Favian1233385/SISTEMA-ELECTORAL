@@ -15,4 +15,8 @@ class Partido extends Model
     {
         return $this->hasMany(Candidato::class);
     }
+    public function procesoElectoral()
+    {
+        return $this->belongsTo(ProcesoElectoral::class, 'proceso_electoral_id');
+    }
 }

@@ -7,6 +7,7 @@ use App\Models\Acta;
 use App\Models\JurisdiccionConfig;
 use App\Models\Canton; 
 use App\Models\Parroquia;
+use App\Models\ProcesoElectoral; 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request; 
@@ -18,10 +19,17 @@ class ResultadoController extends Controller
     {
         $user = Auth::user();
         
-        // CAPTURA DE PROCESO ELECTORAL (Aislamiento de contexto)
-        $proceso = $request->get('proceso', 'generales');
-        if (!in_array($proceso, ['generales', 'primarias'])) {
-            $proceso = 'generales'; // Fallback seguro
+        $procesoId = $request->get('proceso_id') ?? $request->get('proceso');
+        
+        if ($procesoId) {
+            $procesoActual = ProcesoElectoral::find($procesoId);
+        } else {
+            $procesoActual = ProcesoElectoral::where('estado', 'activo')->first();
+        }
+
+        // Fallback de seguridad en caso de que la tabla esté vacía por error
+        if (!$procesoActual) {
+            abort(500, 'No se ha inicializado ningún proceso electoral en el sistema.');
         }
 
         // 1. Obtener pestañas según Rol y Configuración
@@ -38,6 +46,8 @@ class ResultadoController extends Controller
         // 3. Definir Jurisdicción de consulta
         $cantonFiltro = $request->get('canton_id');
         $parroquiaFiltro = $request->get('parroquia_id');
+        $recintoFiltro = $request->get('recinto_id'); // <-- NUEVO
+        $mesaFiltro = $request->get('mesa_id');       // <-- NUEVO
 
         // SEGURIDAD: Validación territorial estricta
         if ($user->esAdminGeneral()) {
@@ -55,9 +65,9 @@ class ResultadoController extends Controller
         
         $finalParroquiaId = $user->esAdminParroquial() ? $user->parroquia_id : $parroquiaFiltro;
 
-        // 4. Consulta de Candidatos FILTRADA POR JURISDICCIÓN Y PROCESO
+        // 4. Consulta de Candidatos FILTRADA POR ID ÚNICO DE PROCESO
         $queryResultados = Candidato::with(['partido'])
-            ->where('tipo_proceso', '=', (string) $proceso) 
+            ->where('proceso_electoral_id', '=', $procesoActual->id) // Cambio crítico: filtrado por ID estructural
             ->where('dignidad', '=', (string) $dignidadSeleccionada);
 
         if ($user->role === 'admin_provincial' && $dignidadSeleccionada === 'Prefecto') {
@@ -77,32 +87,46 @@ class ResultadoController extends Controller
             return $q;
         });
 
-        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user, $proceso) {
-                $query->where('actas.tipo_proceso', '=', (string) $proceso) // Asegura aislamiento en la sumatoria de votos
+        // Sumatoria atómica de votos aislando el proceso correspondiente por su ID extranjero
+       $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $recintoFiltro, $mesaFiltro, $user, $procesoActual) {
+                $query->where('actas.proceso_electoral_id', '=', $procesoActual->id) 
                     ->when($user->role === 'admin_provincial', function($q) use ($user) {
-                        $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                        $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
                     })
                     ->when($finalCantonId, function($q) use ($finalCantonId) {
                         $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
                     })
                     ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
                         $q->whereHas('mesa.recinto', fn($r) => $r->where('parroquia_id', $finalParroquiaId));
+                    })
+                    ->when($recintoFiltro, function($q) use ($recintoFiltro) {
+                        $q->whereHas('mesa', fn($m) => $m->where('recinto_id', $recintoFiltro));
+                    })
+                    ->when($mesaFiltro, function($q) use ($mesaFiltro) {
+                        $q->where('actas.mesa_id', $mesaFiltro);
                     });
             }], 'acta_candidato.votos')
             ->orderByDesc('total_votos')
             ->get();
             
-        // 5. Cálculo de Totales y ESCRUTINIO REAL
-        $totales = Acta::where('tipo_proceso', '=', (string) $proceso)
+        // 5. Cálculo de Totales y ESCRUTINIO REAL basado en el ID del proceso
+        $totales = Acta::where('proceso_electoral_id', '=', $procesoActual->id)
             ->where('dignidad', '=', (string) $dignidadSeleccionada)
             ->when($user->role === 'admin_provincial', function($q) use ($user) {
-                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
             })
             ->when($finalCantonId, function($q) use ($finalCantonId) {
                 $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
             })
             ->when($finalParroquiaId, function($q) use ($finalParroquiaId) {
                 $q->whereHas('mesa.recinto', fn($r) => $r->where('parroquia_id', $finalParroquiaId));
+            })
+            // --- NUEVOS FILTROS PARA EL METRAJE DE ACTAS ---
+            ->when($recintoFiltro, function($q) use ($recintoFiltro) {
+                $q->whereHas('mesa', fn($m) => $m->where('recinto_id', $recintoFiltro));
+            })
+            ->when($mesaFiltro, function($q) use ($mesaFiltro) {
+                $q->where('mesa_id', $mesaFiltro);
             })
             ->select(DB::raw('SUM(votos_blancos) as blancos'), DB::raw('SUM(votos_nulos) as nulos'), DB::raw('COUNT(id) as total_actas'))
             ->first();
@@ -115,6 +139,8 @@ class ResultadoController extends Controller
             ->when($user->role === 'admin_provincial', fn($q) => $q->where('cantones.provincia_id', $user->provincia_id))
             ->when($finalCantonId, fn($q) => $q->where('parroquias.canton_id', $finalCantonId))
             ->when($finalParroquiaId, fn($q) => $q->where('parroquias.id', $finalParroquiaId))
+            ->when($recintoFiltro, fn($q) => $q->where('mesas.recinto_id', $recintoFiltro))
+            ->when($mesaFiltro, fn($q) => $q->where('mesas.id', $mesaFiltro))
             ->count();
 
         $porcentajeEscrutinio = $totalMesasJurisdiccion > 0 
@@ -143,9 +169,26 @@ class ResultadoController extends Controller
         } else {
             $parroquias = [];
         }
+        
+        // CARGA DE RECINTOS Y MESAS ANIDADAS
+        $recintosVisibles = [];
+        if ($finalParroquiaId) {
+            $recintosVisibles = \App\Models\Recinto::where('parroquia_id', $finalParroquiaId)
+                ->orderBy('nombre')
+                ->get();
+        }
 
+        $mesasVisibles = [];
+        if ($recintoFiltro) {
+            $mesasVisibles = \App\Models\Mesa::where('recinto_id', $recintoFiltro)
+                ->orderBy('numero')
+                ->orderBy('genero')
+                ->get();
+        }
+        
+        // Enviamos el objeto completo del proceso a la vista para poder usar su nombre/tipo en los títulos
         return view('resultados', [
-            'proceso'              => $proceso,
+            'proceso'              => $procesoActual, 
             'resultados'           => $resultados,
             'totalVotosBlancos'    => $votosBlancos,
             'totalVotosNulos'      => $votosNulos,
@@ -156,6 +199,11 @@ class ResultadoController extends Controller
             'pestanasVisibles'     => $pestanasVisibles,
             'cantones'             => $cantonesVisibles,
             'parroquias'           => $parroquias,
+            'recintos'          => $recintosVisibles,
+            'mesas'             => $mesasVisibles,
+            'recintoSeleccionado'=> $recintoFiltro,
+            'mesaSeleccionada'   => $mesaFiltro,
+            'historicos'           => ProcesoElectoral::orderBy('anio', 'desc')->get() // Útil para armar un select de históricos
         ]);
     }
 
@@ -165,8 +213,11 @@ class ResultadoController extends Controller
         $cantonId = $request->get('canton_id');
         $parroquiaId = $request->get('parroquia_id');
         
-        // Corrección de Aislamiento: Captura el proceso activo para no mezclar votos en la auditoría
-        $proceso = $request->get('proceso', 'generales');
+        // Identificación del entorno para la auditoría de mesas
+        $procesoId = $request->get('proceso_id');
+        $procesoActual = $procesoId ? ProcesoElectoral::find($procesoId) : ProcesoElectoral::where('estado', 'activo')->first();
+
+        if (!$procesoActual) abort(500, 'Entorno electoral no definido.');
 
         if ($user->role === 'admin_provincial' && $cantonId) {
             $pertenece = Canton::where('id', $cantonId)->where('provincia_id', $user->provincia_id)->exists();
@@ -180,7 +231,7 @@ class ResultadoController extends Controller
             ->join('parroquias', 'recintos.parroquia_id', '=', 'parroquias.id')
             ->join('cantones', 'parroquias.canton_id', '=', 'cantones.id')
             ->where('acta_candidato.candidato_id', $candidato->id)
-            ->where('actas.tipo_proceso', '=', (string) $proceso) // Filtro crítico añadido
+            ->where('actas.proceso_electoral_id', '=', $procesoActual->id) // Modificación quirúrgica
             ->when($user->role === 'admin_provincial', fn($q) => $q->where('cantones.provincia_id', $user->provincia_id))
             ->when($cantonId, fn($q) => $q->where('parroquias.canton_id', $cantonId))
             ->when($parroquiaId, fn($q) => $q->where('parroquias.id', $parroquiaId))
@@ -199,7 +250,7 @@ class ResultadoController extends Controller
             'detalles'    => $detalles,
             'cantonId'    => $cantonId,
             'parroquiaId' => $parroquiaId,
-            'proceso'     => $proceso
+            'proceso'     => $procesoActual
         ]);
     }
 
@@ -207,10 +258,10 @@ class ResultadoController extends Controller
     {
         $user = Auth::user();
 
-        $proceso = $request->get('proceso', 'generales');
-        if (!in_array($proceso, ['generales', 'primarias'])) {
-            $proceso = 'generales';
-        }
+        $procesoId = $request->get('proceso_id');
+        $procesoActual = $procesoId ? ProcesoElectoral::find($procesoId) : ProcesoElectoral::where('estado', 'activo')->first();
+
+        if (!$procesoActual) abort(500, 'Entorno electoral no definido.');
         
         $config = JurisdiccionConfig::where('canton_id', $user->canton_id)->first();
         $pestanasVisibles = $this->obtenerPestanasVisibles($user, $config);
@@ -233,7 +284,7 @@ class ResultadoController extends Controller
         $finalParroquiaId = $user->esAdminParroquial() ? $user->parroquia_id : $parroquiaFiltro;
 
         $queryResultados = Candidato::with(['partido'])
-            ->where('tipo_proceso', '=', (string) $proceso)
+            ->where('proceso_electoral_id', '=', $procesoActual->id) // Ajuste en PDF
             ->where('dignidad', '=', (string) $dignidadSeleccionada);
 
         if ($user->role === 'admin_provincial' && $dignidadSeleccionada === 'Prefecto') {
@@ -253,10 +304,10 @@ class ResultadoController extends Controller
             return $q;
         });
 
-        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user, $proceso) {
-                $query->where('actas.tipo_proceso', '=', (string) $proceso)
+        $resultados = $queryResultados->withSum(['actas as total_votos' => function($query) use ($finalCantonId, $finalParroquiaId, $user, $procesoActual) {
+                $query->where('actas.proceso_electoral_id', '=', $procesoActual->id)
                     ->when($user->role === 'admin_provincial', function($q) use ($user) {
-                        $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                        $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
                     })
                     ->when($finalCantonId, function($q) use ($finalCantonId) {
                         $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
@@ -268,10 +319,10 @@ class ResultadoController extends Controller
             ->orderByDesc('total_votos')
             ->get();
 
-        $totales = Acta::where('tipo_proceso', '=', (string) $proceso)
+        $totales = Acta::where('proceso_electoral_id', '=', $procesoActual->id)
             ->where('dignidad', '=', (string) $dignidadSeleccionada)
             ->when($user->role === 'admin_provincial', function($q) use ($user) {
-                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('provincia_id', $user->provincia_id));
+                $q->whereHas('mesa.recinto.parroquia.canton', fn($c) => $c->where('cantones.provincia_id', $user->provincia_id));
             })
             ->when($finalCantonId, function($q) use ($finalCantonId) {
                 $q->whereHas('mesa.recinto.parroquia', fn($p) => $p->where('canton_id', $finalCantonId));
@@ -292,7 +343,7 @@ class ResultadoController extends Controller
         }
 
         $data = [
-            'proceso'              => $proceso,
+            'proceso'              => $procesoActual,
             'resultados'           => $resultados,
             'totalVotosBlancos'    => $totales->blancos ?? 0,
             'totalVotosNulos'      => $totales->nulos ?? 0,

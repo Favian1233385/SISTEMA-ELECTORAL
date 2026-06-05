@@ -119,7 +119,22 @@ class CandidatoController extends Controller
 
         // Obtener el partido para heredar automáticamente el flujo de redirección correcto
         $partido = Partido::findOrFail($request->partido_id);
-        // Agregar el proceso electoral al array de datos para mantener la integridad referencial
+        
+        // --- AUTOMATIZACIÓN POR ESTADO CRÍTICA ---
+        // Buscamos el proceso electoral correspondiente que esté ACTIVO en el sistema
+        $procesoActivo = \App\Models\ProcesoElectoral::where('tipo', $partido->proceso_eleccion)
+            ->where('estado', 'activo')
+            ->first();
+
+        // Si por algún motivo no hay uno activo, buscamos el último creado de ese tipo para no romper el flujo
+        if (!$procesoActivo) {
+            $procesoActivo = \App\Models\ProcesoElectoral::where('tipo', $partido->proceso_eleccion)
+                ->latest()
+                ->first();
+        }
+
+        // Inyectamos de forma obligatoria el ID numérico para la base de datos
+        $datos['proceso_electoral_id'] = $procesoActivo ? $procesoActivo->id : null;
         $datos['tipo_proceso'] = $partido->proceso_eleccion;
 
         // SEGURIDAD: Forzar territorio según el usuario
@@ -156,7 +171,6 @@ class CandidatoController extends Controller
 
         Candidato::create($datos);
         
-        // Redirección indexada al proceso del candidato guardado
         return redirect()->route('candidatos.index', ['proceso' => $partido->proceso_eleccion])
             ->with('success', 'Inscripción completada correctamente.');
     }
@@ -176,8 +190,7 @@ class CandidatoController extends Controller
         
         return view('candidatos.edit', compact('candidato', 'partidos', 'provincias', 'proceso'));
     }
-
-    /**
+/**
      * Actualiza los datos del candidato.
      */
     public function update(Request $request, Candidato $candidato)
@@ -202,7 +215,6 @@ class CandidatoController extends Controller
             $datos['parroquia_id'] = null;
         }
 
-        // Procesamiento de la fotografía
         if ($request->hasFile('foto')) {
             if ($candidato->foto) {
                 $oldPath = str_replace('/storage/', 'public/', $candidato->foto);
@@ -212,11 +224,19 @@ class CandidatoController extends Controller
             $datos['foto'] = Storage::url($path);
         }
 
-        // OBTENEMOS EL PARTIDO PARA ASIGNAR EL PROCESO CORRECTO
         $partido = Partido::findOrFail($request->partido_id);
+        
+        // Sincronizar el ID del proceso activo en la actualización
+        $procesoActivo = \App\Models\ProcesoElectoral::where('tipo', $partido->proceso_eleccion)
+            ->where('estado', 'activo')
+            ->first();
+
+        if ($procesoActivo) {
+            $datos['proceso_electoral_id'] = $procesoActivo->id;
+        }
+        
         $datos['tipo_proceso'] = $partido->proceso_eleccion;
 
-        // ACTUALIZAMOS EL CANDIDATO (Una sola vez, con todos los datos listos)
         $candidato->update($datos);
         
         return redirect()->route('candidatos.index', ['proceso' => $partido->proceso_eleccion])

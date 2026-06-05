@@ -8,7 +8,8 @@ use App\Http\Controllers\{
     ActaController,
     UserController,
     JurisdiccionConfigController,
-    ResultadoController // Correcto
+    ResultadoController, // Correcto
+    ProcesoElectoralController
 };
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\UserGenerationController;
@@ -75,6 +76,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // =========================================================================
     Route::middleware(['auth', 'EsAdmin'])->group(function () {
         
+        Route::resource('procesos', ProcesoElectoralController::class)->only(['index', 'store', 'update']);
         // Gestión de Usuarios (CRUD Completo y Blindado para Súper Admin)
         Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
         Route::get('/usuarios/crear', [UserController::class, 'create'])->name('users.create');
