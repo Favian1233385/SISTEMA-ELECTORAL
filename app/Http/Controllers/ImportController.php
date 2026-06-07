@@ -38,96 +38,89 @@ class ImportController extends Controller
         try {
 
             // =========================================================================
-            // FLUJO A: PROCESAMIENTO DE ELECCIONES PRIMARIAS (ESTRUCTURA VARIABLE)
+            // FLUJO A: PROCESAMIENTO DE ELECCIONES PRIMARIAS (ESTRUCTURA REAL)
             // =========================================================================
             if ($procesoEleccion === 'primarias') {
                 
-                // En primarias asumimos que la fila 0 o 1 contiene las cabeceras. Buscamos dónde empiezan los datos.
-                $inicioDatos = 0;
-                foreach ($hoja as $index => $fila) {
-                    // Detectamos la cabecera si contiene palabras clave comunes
-                    if (isset($fila[0]) && (str_contains(strinfo($fila[0]), 'CANT') || str_contains(strinfo($fila[1]), 'PARR') || str_contains(strinfo($fila[2]), 'RECINTO'))) {
-                        $inicioDatos = $index + 1;
-                        break;
-                    }
-                    // Si no encuentra cabecera explícita, por defecto evalúa que los datos inician en la fila 1
-                    if ($index == 1) { $inicioDatos = 1; }
-                }
+                $procesoActivo = \App\Models\ProcesoElectoral::where('estado', 'activo')->first();
+                $procesoId = $procesoActivo ? $procesoActivo->id : 2; 
 
-                $datos = array_slice($hoja, $inicioDatos);
+                // Omitimos la primera fila (índice 0) que contiene las cabeceras mostradas en la imagen
+                $datos = array_slice($hoja, 1);
 
                 foreach ($datos as $fila) {
-                    // Validar que la fila tenga contenido mínimo
+                    // Validar que la fila tenga al menos datos de la provincia
                     if (empty($fila) || !isset($fila[0]) || empty(trim($fila[0]))) continue;
 
-                    // Dinamismo: Mapeo posicional secuencial típico de archivos de partidos
-                    // Columna 0: Cantón | Columna 1: Parroquia | Columna 2: Recinto Centralizado | Columna 3: No. Mesa
-                    $nombreCanton    = trim(strtoupper($fila[0] ?? ''));
-                    $nombreParroquia = trim(strtoupper($fila[1] ?? ''));
-                    $nombreRecinto   = trim(strtoupper($fila[2] ?? 'CENTRALIZADO'));
-                    $numeroMesaRaw   = trim($fila[3] ?? '1');
-                    $totalElectores  = (int)($fila[4] ?? 350); // Si no viene, estandariza 350 por mesa
+                    // Mapeo indexado según la captura real del archivo Excel (image_c08ee3.jpg)
+                    $nombreProvinciaExcel = trim(strtoupper($fila[0] ?? ''));
+                    $nombreCanton         = trim(strtoupper($fila[1] ?? ''));
+                    $nombreParroquia      = trim(strtoupper($fila[2] ?? ''));
+                    
+                    // Filtrar por la provincia seleccionada en el formulario web
+                    if ($nombreProvinciaExcel !== $nombreProvinciaFiltro) {
+                        continue;
+                    }
 
+                    // Saltar filas corruptas o vacías en áreas clave
                     if (empty($nombreCanton) || empty($nombreParroquia)) continue;
 
-                    // 1. Vincular a la provincia seleccionada en la Web
+                    // Manejo del Recinto (Columna D -> Índice 3)
+                    $nombreRecintoRaw = trim($fila[3] ?? '');
+                    $nombreRecinto = (!empty($nombreRecintoRaw) && $nombreRecintoRaw !== '0') 
+                        ? strtoupper($nombreRecintoRaw) 
+                        : 'RECINTO UNICO ' . $nombreParroquia;
+
+                    // -----------------------------------------------------------------
+                    // PERSISTENCIA DE UBICACIONES GEOGRÁFICAS
+                    // -----------------------------------------------------------------
                     $canton = Canton::firstOrCreate([
                         'nombre'       => $nombreCanton,
                         'provincia_id' => $provinciaSeleccionada->id
                     ]);
 
-                    // 2. Registrar/Encontrar Parroquia
                     $parroquia = Parroquia::firstOrCreate([
-                        'nombre'    => $nombreParroquia,
-                        'canton_id' => $canton->id
+                        'nombre'               => $nombreParroquia,
+                        'canton_id'            => $canton->id,
+                        'proceso_electoral_id' => $procesoId
                     ]);
 
-                    // 3. Registrar/Encontrar Recinto Unificado de las Primarias
                     $recinto = Recinto::firstOrCreate([
-                        'nombre'       => $nombreRecinto,
-                        'parroquia_id' => $parroquia->id
+                        'nombre'               => $nombreRecinto,
+                        'parroquia_id'         => $parroquia->id,
+                        'proceso_electoral_id' => $procesoId
                     ], [
-                        'direccion'    => 'Sede del Partido / Recinto Centralizado'
+                        'direccion'            => 'Sede o Espacio Cubierto de la Parroquia'
                     ]);
 
-                    // 4. Inserción directa de la Mesa Única de Primarias
-                    $numeroMesa = str_pad($numeroMesaRaw, 3, "0", STR_PAD_LEFT);
+                    // -----------------------------------------------------------------
+                    // LECTURA DINÁMICA DE GÉNEROS DESDE EL EXCEL (image_c08ee3.jpg)
+                    // -----------------------------------------------------------------
+                    
+                    // Bloque Masculino: Columnas F (Índice 5) e I (Índice 8)
+                    $electoresMasc = (int)($fila[5] ?? 0);
+                    $juntasMasc    = (int)($fila[8] ?? 0);
+                    
+                    if ($juntasMasc > 0) {
+                        $this->generarBloqueJuntas($recinto->id, $juntasMasc, $electoresMasc, 'MASCULINO', 'primarias');
+                    }
 
-                    $mesa = Mesa::updateOrCreate(
-                        [
-                            'recinto_id'       => $recinto->id,
-                            'numero'           => $numeroMesa,
-                            'genero'           => 'UNICO', // En primarias no suele dividirse por sexo
-                            'proceso_eleccion' => 'primarias'
-                        ],
-                        [
-                            'num_electores'    => $totalElectores,
-                            'estado'           => 'Habilitada'
-                        ]
-                    );
-
-                    // 5. Crear credencial para el digitador de esta mesa de primarias
-                    $identificador = "r" . $recinto->id . "m" . $numeroMesa . "u_primarias";
-                    $emailFalso = $identificador . "@sistema.com";
-
-                    User::updateOrCreate(
-                        ['email' => $emailFalso], 
-                        [
-                            'name'             => "Digitador Primarias Mesa " . $numeroMesa . " - " . substr($nombreParroquia, 0, 10),
-                            'password'         => Hash::make('12345678'),
-                            'role'             => 'digitador',
-                            'proceso_eleccion' => 'primarias',
-                            'mesa_id'          => $mesa->id
-                        ]
-                    );
+                    // Bloque Femenino: Columnas G (Índice 6) y J (Índice 9)
+                    $electoresFem = (int)($fila[6] ?? 0);
+                    $juntasFem    = (int)($fila[9] ?? 0);
+                    
+                    if ($juntasFem > 0) {
+                        $this->generarBloqueJuntas($recinto->id, $juntasFem, $electoresFem, 'FEMENINO', 'primarias');
+                    }
                 }
+            }
 
             // =========================================================================
             // FLUJO B: PROCESAMIENTO ESTRUCTURA OFICIAL CNE (ELECCIONES GENERALES)
             // =========================================================================
-            } else {
+            elseif ($procesoEleccion === 'generales') {
                 
-                $datos = array_slice($hoja, 9); // Salto estricto de las 9 filas informativas del CNE
+                $datos = array_slice($hoja, 9); 
 
                 foreach ($datos as $fila) {
                     if (empty($fila) || !isset($fila[1]) || empty($fila[1])) continue;
@@ -189,6 +182,9 @@ class ImportController extends Controller
 
     private function generarBloqueJuntas($recintoId, $totalJuntas, $totalElectoresGenero, $genero, $procesoEleccion)
     {
+        // Forzar mayúsculas sostenidas y limpiar espacios ('MASCULINO' o 'FEMENINO')
+        $generoFormateado = strtoupper(trim($genero)); 
+
         $electoresPorMesa = ($totalJuntas > 0) ? (int)floor($totalElectoresGenero / $totalJuntas) : 0;
         $residuoElectores = ($totalJuntas > 0) ? ($totalElectoresGenero % $totalJuntas) : 0;
 
@@ -201,12 +197,13 @@ class ImportController extends Controller
                 $residuoElectores--;
             }
 
+            // updateOrCreate buscará por la combinación exacta de estos 4 campos
             $mesa = Mesa::updateOrCreate(
                 [
                     'recinto_id'       => $recintoId,
                     'numero'           => $numeroMesa,
-                    'genero'           => $genero, 
-                    'proceso_eleccion' => $procesoEleccion 
+                    'genero'           => $generoFormateado, // Guarda 'MASCULINO' o 'FEMENINO'
+                    'proceso_eleccion' => $procesoEleccion   // Guarda 'primarias' o 'generales'
                 ],
                 [
                     'num_electores'    => $electoresFinales,
@@ -214,13 +211,15 @@ class ImportController extends Controller
                 ]
             );
 
-            $identificador = "r" . $recintoId . "m" . $numeroMesa . strtolower(substr($genero, 0, 1)) . "_" . $procesoEleccion;
+            // Identificador único para el correo electrónico del digitador
+            $sufijoGenero = ($generoFormateado === 'MASCULINO') ? 'm' : 'f';
+            $identificador = "r" . $recintoId . "m" . $numeroMesa . $sufijoGenero . "_" . $procesoEleccion;
             $emailFalso = $identificador . "@sistema.com";
 
             User::updateOrCreate(
                 ['email' => $emailFalso], 
                 [
-                    'name'             => "Digitador " . ucfirst(strtolower($genero)) . " Mesa " . $numeroMesa . " (" . ucfirst($procesoEleccion) . ")",
+                    'name'             => "Digitador " . ucfirst(strtolower($generoFormateado)) . " Mesa " . $numeroMesa . " (" . ucfirst($procesoEleccion) . ")",
                     'password'         => Hash::make('12345678'),
                     'role'             => 'digitador',
                     'proceso_eleccion' => $procesoEleccion,
@@ -230,8 +229,6 @@ class ImportController extends Controller
         }
     }
 }
-
-// Función auxiliar para normalizar búsquedas de cabeceras libres de texto
 if (!function_exists('strinfo')) {
     function strinfo($value) {
         return strtoupper(trim(stringf($value)));

@@ -24,7 +24,7 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            <div class="bg-white p-6 rounded-lg shadow border border-gray-200 h-fit">
+            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Nuevo Periodo Electoral</h2>
                 
                 <form action="{{ route('procesos.store') }}" method="POST">
@@ -59,65 +59,77 @@
                     </button>
                 </form>
             </div>
-
-            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200">
+            <!-- Historial de Procesos con Indicadores Visuales y Acciones Contextuales -->
+            <div class="lg:col-span-4 bg-white p-6 rounded-lg shadow border border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Historial de Procesos Registrados</h2>
-                
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+
+                {{-- ✅ CORRECCIÓN: overflow-x-auto para scroll horizontal si el espacio es insuficiente --}}
+                <div class="block w-full overflow-x-auto">
+                    {{-- ✅ CORRECCIÓN: min-w-[640px] evita que la tabla se comprima y corte las acciones --}}
+                    <table class="w-full min-w-[640px] divide-y divide-gray-200 text-xs sm:text-sm">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider w-16">Año</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Nombre del Proceso</th>
-                                <th class="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider w-28">Tipo</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-500 uppercase tracking-wider w-36">Estado</th>
-                                <th class="px-4 py-3 text-center font-medium text-gray-500 uppercase tracking-wider w-40">Acciones</th>
+                                <th class="px-2 sm:px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider w-12">Año</th>
+                                <th class="px-2 sm:px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Nombre del Proceso</th>
+                                <th class="px-2 sm:px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider w-24">Tipo</th>
+                                <th class="px-2 sm:px-4 py-3 text-center font-medium text-gray-500 uppercase tracking-wider w-24">Estado</th>
+                                {{-- ✅ CORRECCIÓN: w-52 en lugar de w-48 + min-w para que no se corte --}}
+                                <th class="px-2 sm:px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider w-52 min-w-[200px]">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             @foreach($procesos as $item)
                                 <tr class="{{ $item->estado === 'activo' ? 'bg-blue-50/50' : '' }}">
-                                    <td class="px-4 py-4 whitespace-nowrap font-bold text-gray-700">
+                                    <td class="px-2 sm:px-4 py-3 whitespace-nowrap font-bold text-gray-700">
                                         {{ $item->anio }}
                                     </td>
-                                    <td class="px-4 py-4 text-gray-600">
+                                    <td class="px-2 sm:px-4 py-3 text-gray-600 break-words text-xs sm:text-sm">
                                         {{ $item->nombre }}
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap">
+                                    <td class="px-2 sm:px-4 py-3 whitespace-nowrap">
                                         @if($item->tipo === 'primarias')
-                                            <span class="px-2 py-0.5 inline-flex text-xs leading-5 font-medium rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                            <span class="px-1.5 py-0.5 inline-flex text-[10px] sm:text-xs leading-5 font-medium rounded bg-purple-100 text-purple-800 border border-purple-200">
                                                 Primarias
                                             </span>
                                         @else
-                                            <span class="px-2 py-0.5 inline-flex text-xs leading-5 font-medium rounded bg-blue-100 text-blue-800 border border-blue-200">
+                                            <span class="px-1.5 py-0.5 inline-flex text-[10px] sm:text-xs leading-5 font-medium rounded bg-blue-100 text-blue-800 border border-blue-200">
                                                 Generales
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-center">
+                                    <td class="px-2 sm:px-4 py-3 whitespace-nowrap text-center">
                                         @if($item->estado === 'activo')
-                                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+                                            <span class="px-2 py-0.5 inline-flex text-[10px] sm:text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
                                                 Activo
                                             </span>
                                         @else
-                                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                                            <span class="px-2 py-0.5 inline-flex text-[10px] sm:text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
                                                 Archivado
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-center">
+                                    {{-- ✅ CORRECCIÓN: whitespace-nowrap en td de acciones para que no se parta --}}
+                                    <td class="px-2 sm:px-4 py-3 whitespace-nowrap text-right">
                                         @if($item->estado !== 'activo')
                                             <form action="{{ route('procesos.update', $item->id) }}" method="POST" class="inline-block">
                                                 @csrf
                                                 @method('PUT')
-                                                <button type="submit" 
-                                                        onclick="return confirm('¿Está seguro de cambiar el entorno activo al periodo: {{ $item->nombre }} ({{ ucfirst($item->tipo) }})?')"
-                                                        class="bg-white hover:bg-gray-50 text-blue-600 border border-blue-300 font-medium py-1 px-3 rounded shadow-sm text-xs transition duration-150">
+                                                <button type="submit"
+                                                        onclick="return confirm('¿Está seguro de cambiar el entorno activo al periodo: {{ $item->nombre }}?')"
+                                                        class="bg-white hover:bg-gray-50 text-blue-600 border border-gray-300 font-medium py-1 px-2.5 rounded shadow-sm text-xs transition duration-150">
                                                     Activar
                                                 </button>
                                             </form>
                                         @else
-                                            <span class="text-xs text-gray-400 italic font-medium">Dominante</span>
+                                            {{-- ✅ CORRECCIÓN: gap-2 para separar mejor los elementos --}}
+                                            <div class="inline-flex items-center gap-2 justify-end text-xs">
+                                                <span class="text-gray-400 italic font-medium bg-gray-50 px-1 py-0.5 rounded border border-gray-100 text-[11px]">Dominante</span>
+                                                <button type="button"
+                                                        onclick="abrirModalLimpieza('{{ route('procesos.limpiarPruebas', $item->id) }}', '{{ $item->nombre }}')"
+                                                        class="bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-2.5 rounded shadow-sm text-[11px] transition duration-150 ease-in-out">
+                                                    Limpiar Simulacro
+                                                </button>
+                                            </div>
                                         @endif
                                     </td>
                                 </tr>
@@ -129,4 +141,56 @@
 
         </div>
     </div>
+
+    <!-- Modal de Seguridad Estricta para Limpieza de Datos -->
+    <div id="modalLimpieza" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 border-t-4 border-red-600">
+            <h3 class="text-lg font-bold text-gray-900 mb-2">🚨 Acción Altamente Crítica</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Está a punto de vaciar por completo las tablas de escrutinio de <strong id="modalProcesoNombre"></strong>. Esta operación eliminará de forma irreversible todas las actas digitadas y desgloses de votos cargados durante las capacitaciones.
+            </p>
+
+            <form id="formLimpieza" method="POST" action="">
+                @csrf
+                
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Contraseña del Administrador:</label>
+                    <input type="password" name="password" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                        Escriba exactamente <span class="text-red-600 font-bold">BORRAR PRUEBAS</span>:
+                    </label>
+                    <input type="text" name="confirmacion" required autocomplete="off"
+                           class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                </div>
+
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="cerrarModalLimpieza()"
+                            class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium rounded transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition shadow">
+                        Confirmar Destrucción de Pruebas
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function abrirModalLimpieza(urlAction, nombreProceso) {
+            document.getElementById('formLimpieza').action = urlAction;
+            document.getElementById('modalProcesoNombre').innerText = nombreProceso;
+            document.getElementById('modalLimpieza').classList.remove('hidden');
+        }
+
+        function cerrarModalLimpieza() {
+            document.getElementById('modalLimpieza').classList.add('hidden');
+            document.getElementById('formLimpieza').reset();
+        }
+    </script>
 </x-app-layout>

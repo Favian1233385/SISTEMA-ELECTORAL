@@ -91,7 +91,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Configuraciones Críticas del Sistema
         Route::get('/configuracion-jurisdicciones', [JurisdiccionConfigController::class, 'index'])->name('jurisdiccion.config');
         Route::post('/jurisdiccion-update/{id}', [JurisdiccionConfigController::class, 'update'])->name('jurisdiccion.update');
-        Route::delete('/admin/usuarios/limpiar', [UserGenerationController::class, 'limpiarDigitadores'])->name('usuarios.usuarios.limpiar');
+        Route::delete('/admin/usuarios/limpiar', [UserGenerationController::class, 'limpiarDigitadores'])->name('usuarios.limpiar');
         Route::post('/generar-digitadores', [UserGenerationController::class, 'generarDigitadores'])->name('usuarios.generar');
         Route::get('/ver-digitadores', [UserGenerationController::class, 'verDigitadores'])->name('admin.ver.digitadores');
 

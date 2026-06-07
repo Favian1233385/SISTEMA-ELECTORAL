@@ -17,7 +17,8 @@ class Mesa extends Model
         'recinto_id',
         'num_electores', // Útil para validar que los votos no superen el total de la mesa
         'estado', // Estado de la mesa: Habilitada o Deshabilitada
-        'tipo_proceso',   
+        'tipo_proceso',  
+        'proceso_eleccion' 
     ];
 
     // Una mesa pertenece a un recinto

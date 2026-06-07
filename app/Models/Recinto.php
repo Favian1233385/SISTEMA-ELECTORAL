@@ -11,10 +11,12 @@ class Recinto extends Model
 
     protected $table = 'recintos'; // Forzamos nombre en español
 
+    // CORRECCIÓN: Se agrega 'proceso_electoral_id' al fillable para permitir la carga masiva
     protected $fillable = [
         'nombre',
         'parroquia_id',
-        'direccion' // Opcional, pero recomendado para sistemas electorales reales
+        'direccion',
+        'proceso_electoral_id' 
     ];
 
     // Relación inversa: Un recinto pertenece a una parroquia
@@ -27,5 +29,11 @@ class Recinto extends Model
     public function mesas()
     {
         return $this->hasMany(Mesa::class);
+    }
+
+    // NUEVA RELACIÓN: Un recinto pertenece a un proceso electoral específico
+    public function procesoElectoral()
+    {
+        return $this->belongsTo(ProcesoElectoral::class, 'proceso_electoral_id');
     }
 }
