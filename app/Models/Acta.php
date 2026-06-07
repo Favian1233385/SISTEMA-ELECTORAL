@@ -10,13 +10,15 @@ class Acta extends Model
     use HasFactory;
 
     protected $fillable = [
-        'mesa_id',      // Existe en DB
-        'user_id',      // Existe en DB
-        'dignidad',     // Existe en DB
-        'votos_blancos',// Existe en DB
-        'votos_nulos',  // Existe en DB
-        'foto_path',    // Existe en DB
-        'estado'        // Existe en DB
+        'mesa_id',
+        'user_id',
+        'dignidad',
+        'votos_blancos',
+        'votos_nulos',
+        'foto_path',
+        'estado',
+        'tipo_proceso',
+        'proceso_electoral_id',
     ];
 
     // Relación: Un acta pertenece a una Mesa
@@ -44,8 +46,14 @@ class Acta extends Model
      */
     public function recinto()
     {
-        // El acta pertenece a una mesa, y la mesa pertenece a un recinto
-        return $this->mesa->recinto(); 
+        return $this->hasOneThrough(
+            Recinto::class, // Modelo Destino
+            Mesa::class,    // Modelo Intermedio
+            'id',           // Llave foránea en la tabla 'mesas' que apunta a 'actas' (mesa_id)
+            'id',           // Llave foránea en la tabla 'recintos' que apunta a 'mesas' (recinto_id)
+            'mesa_id',      // Llave local en la tabla 'actas'
+            'recinto_id'    // Llave local en la tabla 'mesas'
+        );
     }
     public function procesoElectoral()
     {

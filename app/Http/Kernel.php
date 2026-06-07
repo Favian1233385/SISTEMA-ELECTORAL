@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
 
         // ALIAS PROFESIONAL REQUERIDO POR TU SAAS:
         'EsAdmin' => \App\Http\Middleware\EsAdmin::class,
+        'solo.digitadores' => \App\Http\Middleware\SoloDigitadores::class,
     ];
 }

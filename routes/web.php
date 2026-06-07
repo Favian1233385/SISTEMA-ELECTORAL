@@ -39,27 +39,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/actas/crear', [ActaController::class, 'create'])->name('actas.create');
     Route::get('/actas/{acta}', [ActaController::class, 'show'])->name('actas.show');
 
-    // API para Selects Dinámicos
-    Route::prefix('api')->group(function () {
-        Route::get('/cantones/{provincia_id}', [ActaController::class, 'getCantones']);
-        Route::get('/parroquias/{canton_id}', [ActaController::class, 'getParroquias']);
-        Route::get('/recintos/{parroquia_id}', [ActaController::class, 'getRecintos']);
-        Route::get('/mesas/{recinto_id}', [ActaController::class, 'getMesas']);
-        Route::get('/get-candidatos-filtrados', [ActaController::class, 'getCandidatosFiltrados'])->name('candidatos.filtrados');
+    // Endpoints asíncronos para los selectores en cascada y tarjetas de candidatos
+    Route::get('/actas/cantones/{provincia_id}', [ActaController::class, 'getCantones']);
+    Route::get('/actas/parroquias/{canton_id}', [ActaController::class, 'getParroquias']);
+    Route::get('/actas/recintos/{parroquia_id}', [ActaController::class, 'getRecintos']);
+    Route::get('/actas/mesas/{recinto_id}', [ActaController::class, 'getMesas']);
+    Route::get('/candidatos-filtrados', [ActaController::class, 'getCandidatosFiltrados'])->name('candidatos.filtrados');
 
-        Route::get('/cantones/{canton}/parroquias', function($cantonId) {
-            return App\Models\Parroquia::where('canton_id', $cantonId)
-                ->select('id', 'nombre')
-                ->orderBy('nombre', 'asc')
-                ->get();
-        });
+    // Mantenemos tu API de parroquias aislada por si la usas en administración
+    Route::get('/api/cantones/{canton}/parroquias', function($cantonId) {
+        return App\Models\Parroquia::where('canton_id', $cantonId)
+            ->select('id', 'nombre')
+            ->orderBy('nombre', 'asc')
+            ->get();
     });
-
     // --- BLOQUE: SOLO DIGITADORES ---
     Route::middleware(['solo.digitadores'])->group(function () {
-        Route::post('/actas', [ActaController::class, 'store'])->name('actas.store');
-
+        // (Si tenías o vas a poner otras rutas exclusivas de digitadores van aquí, por ahora queda vacío)
     });
+    // Ruta de guardado liberada para que tanto administradores como digitadores accedan
+    Route::post('/actas', [ActaController::class, 'store'])->name('actas.store');
     
     // =========================================================================
     // --- BLOQUE: ADMINISTRADORES DE TERRITORIO (Provincial / Cantonal / Súper Admin) ---

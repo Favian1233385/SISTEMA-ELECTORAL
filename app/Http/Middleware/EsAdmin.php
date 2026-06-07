@@ -10,22 +10,25 @@ class EsAdmin
 {
     /**
      * Handle an incoming request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse)  $next
+     * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
      */
     public function handle(Request $request, Closure $next)
     {
-        // Verificamos si el usuario está logueado
+        // 1. Verificación de autenticación básica
         if (!Auth::check()) {
             return redirect('login');
         }
 
-        $role = Auth::user()->role;
-
-        // RESTICCIÓN RIGUROSA: Solo el Súper Administrador general pasa a este bloque
-        if ($role === 'admin' || $role === 'admin_general') {
+        // 2. Restricción rigurosa basada en el modelo User
+        // Llama al método esAdminGeneral() que valida estrictamente el rol 'admin'
+        if (Auth::user()->esAdminGeneral()) {
             return $next($request);
         }
 
-        // Si es provincial, cantonal, parroquial o digitador, se le deniega el acceso
+        // 3. Denegación absoluta para administradores territoriales o digitadores
         abort(403, 'Acceso denegado: Este módulo es exclusivo del Súper Administrador del sistema.');
     }
 }

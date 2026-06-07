@@ -33,6 +33,22 @@ class ActaController extends Controller
     {
         $user = auth()->user();
         
+        // -----------------------------------------------------------------------------------------
+        // BLINDAJE DE SEGURIDAD INTERNA: Bloqueo de acceso al panel para Digitadores con acta existente
+        // -----------------------------------------------------------------------------------------
+        if ($user->esDigitador() && $user->mesa_id) {
+            $dignidadAsignada = $user->dignidad_asignada;
+            
+            $yaExisteActa = Acta::where('mesa_id', $user->mesa_id)
+                ->where('dignidad', $dignidadAsignada)
+                ->exists();
+
+            if ($yaExisteActa) {
+                return redirect()->route('actas.index')->with('error', 'Acceso denegado: Usted ya ha ingresado y guardado el acta asignada a su usuario de forma exitosa. El panel de digitación se encuentra bloqueado.');
+            }
+        }
+        // -----------------------------------------------------------------------------------------
+
         $provincias = $user->esAdminGeneral() 
             ? Provincia::orderBy('nombre')->get() 
             : Provincia::where('id', $user->provincia_id)->get();
@@ -43,18 +59,19 @@ class ActaController extends Controller
             $mesaAsignada = Mesa::with('recinto.parroquia.canton.provincia')->find($user->mesa_id);
         }
         
+        // Estructura de jurisdicción optimizada e inyección directa para automatización
         $jurisdiccion = [
             'esDigitador'       => $user->esDigitador(),
             'esAdminGeneral'    => $user->esAdminGeneral(),
             'esAdminProvincial' => !$user->esAdminGeneral() && !$user->esDigitador() && $user->provincia_id && !$user->canton_id,
-            'provincia_id'      => $user->provincia_id,
-            'canton_id'         => $user->canton_id,
-            'parroquia_id'      => $user->parroquia_id,
+            'provincia_id'      => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto->parroquia->canton->provincia_id : $user->provincia_id,
+            'canton_id'         => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto->parroquia->canton_id : $user->canton_id,
+            'parroquia_id'      => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto->parroquia_id : $user->parroquia_id,
+            'recinto_id'        => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto_id : null,
             'mesa_id'           => $user->mesa_id, 
             'dignidad_asignada' => $user->dignidad_asignada 
         ];
 
-        // Enviamos $mesaAsignada a la vista actas.create
         return view('actas.create', compact('provincias', 'user', 'jurisdiccion', 'mesaAsignada'));
     }
 
@@ -126,103 +143,191 @@ class ActaController extends Controller
 
     public function getCandidatosFiltrados(Request $request)
     {
-        $user = \App\Models\User::find(auth()->id());
-        if (!$user) return response()->json([]);
+        try {
+            $user = auth()->user();
+            
+            // LOG DE DIAGNÓSTICO: Guardamos qué datos están llegando desde el JavaScript
+            Log::info('Iniciando carga de candidatos asignados', [
+                'usuario_id' => $user->id,
+                'dignidad_usuario' => $user->dignidad_asignada,
+                'provincia_recibida' => $request->query('provincia_id'),
+                'canton_recibido' => $request->query('canton_id'),
+                'parroquia_recibida' => $request->query('parroquia_id')
+            ]);
 
-        $dignidadRaw = $user->esAdminGeneral() ? $request->query('dignidad') : $user->dignidad_asignada;
-        if (!$dignidadRaw) return response()->json([]);
-        $dignidad = strtoupper(trim($dignidadRaw));
+            // 1. CAPTURA Y LIMPIEZA DE DIGNIDAD
+            $dignidadRaw = $user->dignidad_asignada ?? $request->query('dignidad', '');
+            $dignidad = strtolower(strtr(utf8_decode($dignidadRaw), utf8_decode('áéíóúÁÉÍÓÚ'), 'aeiouAEIOU'));
 
-        // CORRECCIÓN SECCIÓN CANDIDATOS: Filtro estricto por dignidad Y proceso_eleccion del usuario logueado
-        $query = Candidato::with('partido')
-            ->where('dignidad', $dignidad)
-            ->where('proceso_eleccion', $user->proceso_eleccion); // <--- Bloquea la mezcla
-
-        $provincia_id = $user->esAdminGeneral() ? $request->query('provincia_id') : $user->provincia_id;
-        $canton_id = ($user->esAdminGeneral() || !$user->canton_id) ? $request->query('canton_id') : $user->canton_id;
-        $parroquia_id = ($user->esAdminGeneral() || !$user->parroquia_id) ? $request->query('parroquia_id') : $user->parroquia_id;
-
-        if (str_contains($dignidad, 'PREFECTO')) {
-            $query->where('provincia_id', '=', $provincia_id);
-        } 
-        elseif (str_contains($dignidad, 'ALCALDE') || str_contains($dignidad, 'CONCEJAL')) {
-            if ($canton_id) {
-                $query->where('canton_id', '=', $canton_id);
-            } else {
+            if (empty($dignidad)) {
+                Log::warning('Se canceló la búsqueda: La dignidad del usuario está vacía.');
                 return response()->json([]);
             }
-        } 
-        elseif (str_contains($dignidad, 'JUNTA')) {
-            if ($parroquia_id) {
+
+            $provincia_id = $request->query('provincia_id');
+            $canton_id    = $request->query('canton_id');
+            $parroquia_id = $request->query('parroquia_id');
+
+            $query = Candidato::with(['partido']);
+
+            // 2. VERIFICACIÓN DEL PROCESO ELECTORAL ACTIVO
+            $procesoActivo = \App\Models\ProcesoElectoral::where('estado', 'activo')->first();
+
+            if (!$procesoActivo) {
+                // Escribir la alerta en el log para el desarrollador
+                Log::error('ERROR CRÍTICO: No se encontró ningún Proceso Electoral con estado = "activo" en la base de datos.');
+                return response()->json(['error' => 'No hay proceso electoral activo.'], 500);
+            }
+
+            $query->where('proceso_electoral_id', $procesoActivo->id); 
+
+            // 3. CONDICIONALES GEOGRÁFICAS SEGÚN ÁMBITO
+            if (str_contains($dignidad, 'prefecto')) { 
+                if (!$provincia_id) {
+                    Log::warning('Falta provincia_id para dignidad provincial (Prefecto)');
+                    return response()->json([]);
+                }
+                $query->where('provincia_id', '=', $provincia_id);
+            } 
+            elseif (str_contains($dignidad, 'alcalde') || str_contains($dignidad, 'concejal')) {
+                if (!$canton_id) {
+                    Log::warning('Falta canton_id para dignidad cantonal');
+                    return response()->json([]);
+                }
+                $query->where('canton_id', '=', $canton_id);
+            } 
+            elseif (str_contains($dignidad, 'junta')) {
+                if (!$parroquia_id) {
+                    Log::warning('Falta parroquia_id para dignidad parroquial');
+                    return response()->json([]);
+                }
                 $query->where('parroquia_id', '=', $parroquia_id);
             } else {
+                Log::warning('La dignidad no coincide con ningún ámbito geográfico conocido: ' . $dignidadRaw);
                 return response()->json([]);
             }
-        }
+            
+            // 4. ORDENAMIENTO NORMALIZADO (PRIMARIAS VS GENERALES)
+            if ($procesoActivo->tipo === 'primarias') {
+                // Orden alfabético por el nombre de la lista/partido utilizando una subconsulta limpia
+                $query->orderBy(function($q) {
+                    $q->select('nombre')
+                      ->from('partidos')
+                      ->whereColumn('partidos.id', 'candidatos.partido_id');
+                }, 'asc');
+            } else {
+                // Orden numérico real convirtiendo el campo texto a entero para las generales
+                $query->orderByRaw('(SELECT CAST(numero AS UNSIGNED) FROM partidos WHERE partidos.id = candidatos.partido_id) ASC');
+            }
 
-        $candidatos = $query->orderBy('nombre', 'asc')->get();
-        return response()->json($candidatos);
+            $candidatos = $query->get();
+
+            // LOG DE ÉXITO: Guardamos cuántos registros encontró la consulta SQL
+            Log::info('Consulta ejecutada con éxito', ['cantidad_candidatos' => $candidatos->count()]);
+
+            return response()->json($candidatos);
+
+        } catch (\Exception $e) {
+            // CAPTURA DE ERRORES DE SINTAXIS, CONEXIÓN O CAMPOS INEXISTENTES
+            Log::error('ERROR GRAVE EN getCandidatosFiltrados: ' . $e->getMessage(), [
+                'archivo' => $e->getFile(),
+                'linea' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json(['error' => 'Excepción interna del servidor.'], 500);
+        }
     }
 
     public function store(Request $request)
     {
         $user = auth()->user();
 
+        // 1. Flexibilidad de validación según el rol del usuario
+        $isDigitadorConMesa = $user->esDigitador() && $user->mesa_id;
+
         $request->validate([
-            'mesa_id' => 'required|exists:mesas,id',
-            'dignidad' => 'required',
-            'votos_blancos' => 'required|integer|min:0',
-            'votos_nulos' => 'required|integer|min:0',
+            'mesa_id'          => $isDigitadorConMesa ? 'nullable' : 'required|exists:mesas,id',
+            'dignidad'         => $isDigitadorConMesa ? 'nullable' : 'required',
+            'votos_blancos'    => 'required|integer|min:0',
+            'votos_nulos'      => 'required|integer|min:0',
             'votos_candidatos' => 'required|array'
         ]);
 
-        $mesa_id_final = ($user->esDigitador() && $user->mesa_id) ? $user->mesa_id : $request->mesa_id;
+        // 2. Obtener el proceso electoral activo
+        $procesoActivo = \App\Models\ProcesoElectoral::where('estado', 'activo')->first();
+        if (!$procesoActivo) {
+            return back()->withErrors(['error' => 'No existe un proceso electoral activo en el sistema.']);
+        }
+
+        // 3. Resolver ID de la mesa
+        $mesa_id_final = $isDigitadorConMesa ? $user->mesa_id : $request->mesa_id;
         $mesa = Mesa::find($mesa_id_final);
         
         if (!$mesa) {
             return back()->withErrors(['error' => 'La mesa seleccionada no es válida o no existe.']);
         }
 
-        $dignidad_final = $user->esAdminGeneral() ? $request->dignidad : ($user->dignidad_asignada ?? $request->dignidad);
+        // 4. Resolver Dignidad
+        $dignidad_final = $user->esDigitador() ? $user->dignidad_asignada : $request->dignidad;
 
+        // 5. BLINDAJE DE SEGURIDAD EN BACKEND: Evitar duplicación enviando a la vista index con mensaje de error
         if (Acta::where('mesa_id', $mesa_id_final)->where('dignidad', $dignidad_final)->exists()) {
-            return back()->withErrors(['error' => 'Esta acta ya ha sido ingresada anteriormente para esta mesa y dignidad.']);
+            return redirect()->route('actas.index')->with('error', 'Acceso denegado: Usted ya ha ingresado y guardado el acta asignada a su usuario de forma exitosa. El panel de digitación se encuentra bloqueado.');
         }
 
-        // --- CÁLCULO MATEMÁTICO DE CUADRE (SEMÁFORO BACKEND) ---
+        // 6. Semáforo de validación amoldado a las opciones estrictas de tu ENUM
         $suma_votos_candidatos = array_sum($request->votos_candidatos);
         $total_votos_acta = $suma_votos_candidatos + $request->votos_blancos + $request->votos_nulos;
         $limite_electores = $mesa->num_electores;
 
-        // Reglas de negocio para asignación automática del estado
-        if ($total_votos_acta == $limite_electores) {
-            $estado_acta = 'cuadrada';
-        } elseif ($total_votos_acta < $limite_electores) {
-            $estado_acta = 'cuadrada_con_ausentismo';
+        // Ajuste directo basado en: enum('ingresada','verificada','con_novedad')
+        if ($total_votos_acta <= $limite_electores) {
+            $estado_acta = 'ingresada'; // Cuadradas normales o con ausentismo entran limpias
         } else {
-            $estado_acta = 'inconsistente'; // Semáforo Rojo automático
+            $estado_acta = 'con_novedad'; // Supera el padrón (Inconsistente)
         }
 
-        DB::transaction(function () use ($request, $user, $mesa_id_final, $dignidad_final, $estado_acta) {
-            $acta = Acta::create([
-                'mesa_id'       => $mesa_id_final,
-                'dignidad'      => $dignidad_final,
-                'votos_blancos' => $request->votos_blancos,
-                'votos_nulos'   => $request->votos_nulos,
-                'user_id'       => $user->id, 
-                'estado'        => $estado_acta // Almacenamos el estado real del cuadre
-            ]);
+        // 7. Persistencia atómica mediante Transacción SQL
+        try {
+            DB::transaction(function () use ($request, $user, $mesa_id_final, $dignidad_final, $estado_acta, $procesoActivo) {
+                
+                // Inserción mapeada uno a uno con los campos obligatorios (NO NULL) de tu esquema
+                $acta = Acta::create([
+                    'proceso_electoral_id' => $procesoActivo->id,
+                    'mesa_id'              => $mesa_id_final,
+                    'user_id'              => $user->id,
+                    'dignidad'             => $dignidad_final,
+                    'tipo_proceso'         => $procesoActivo->tipo ?? 'generales', // Toma el valor dinámico o hereda el default de la BD
+                    'votos_blancos'        => $request->votos_blancos,
+                    'votos_nulos'          => $request->votos_nulos,
+                    'estado'               => $estado_acta,
+                    'foto_path'            => null // Queda preparado si manejas subida de imágenes en el futuro
+                ]);
 
-            $votosData = [];
-            foreach ($request->votos_candidatos as $id => $votos) {
-                if ($votos !== null) {
-                    $votosData[$id] = ['votos' => $votos];
+                // Sincronización de votos en la tabla asociativa 'acta_candidato'
+                $votosData = [];
+                foreach ($request->votos_candidatos as $candidatoId => $votos) {
+                    if ($votos !== null && $votos !== '') {
+                        $votosData[$candidatoId] = [
+                            'votos' => (int) $votos
+                        ];
+                    }
                 }
-            }
 
-            $acta->candidatos()->attach($votosData);
-        });
+                if (!empty($votosData)) {
+                    $acta->candidatos()->attach($votosData);
+                }
+            });
 
-        return redirect()->route('actas.index')->with('success', "Acta procesada correctamente. Estado: Up-Stream ({$estado_acta})");
+            // Forzar limpieza de caché para actualizar reportes
+            \Illuminate\Support\Facades\Artisan::call('cache:clear');
+
+            return redirect()->route('actas.index')->with('success', "Acta guardada exitosamente en el sistema.");
+
+        } catch (\Exception $e) {
+            Log::error('Fallo estructural en guardado de acta: ' . $e->getMessage());
+            return back()->withInput()->withErrors(['error' => 'Error de consistencia SQL: ' . $e->getMessage()]);
+        }
     }
 }

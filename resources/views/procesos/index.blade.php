@@ -143,7 +143,7 @@
     </div>
 
     <!-- Modal de Seguridad Estricta para Limpieza de Datos -->
-    <div id="modalLimpieza" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div id="modalLimpieza" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black bg-opacity-50 p-4" style="display: none; align-items: center; justify-content: center;">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 border-t-4 border-red-600">
             <h3 class="text-lg font-bold text-gray-900 mb-2">🚨 Acción Altamente Crítica</h3>
             <p class="text-sm text-gray-600 mb-4">
