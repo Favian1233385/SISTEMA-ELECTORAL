@@ -20,9 +20,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',              // admin, admin_provincial, admin_cantonal, admin_parroquial, digitador
-        'proceso_eleccion',      // <-- 'general' o 'primaria' (Define qué ve el usuario)
-        'dignidad_asignada', // prefecto, alcalde, concejal, junta_parroquial
+        'role',              
+        'proceso_eleccion',     
+        'dignidad_asignada', 
         'provincia_id',
         'canton_id',
         'parroquia_id',

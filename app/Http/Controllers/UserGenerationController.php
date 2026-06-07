@@ -98,12 +98,13 @@ class UserGenerationController extends Controller
                         'name'              => $nombreDigitador,
                         'password'          => Hash::make('voto2026'), 
                         'role'              => 'digitador',
+                        'proceso_eleccion'  => $procesoMesa,
                         'tipo_proceso'      => $procesoUser,
                         'mesa_id'           => $mesa->id,
                         'dignidad_asignada' => $dignidad,
-                        'provincia_id'      => $canton->provincia_id ?? null,
-                        'canton_id'         => $canton->id ?? null,
-                        'parroquia_id'      => $parroquia->id ?? null,
+                        'provincia_id'      => $canton->provincia_id ?? $territorioId, 
+                        'canton_id'         => $canton->id,
+                        'parroquia_id'      => $parroquia->id,
                         'recinto_id'        => $recinto->id,
                     ]
                 );
@@ -124,16 +125,22 @@ class UserGenerationController extends Controller
     }
 
     /**
-     * Vista para listar e imprimir las credenciales.
+     * Vista para listar e informar el aislamiento total de credenciales.
      */
     public function verDigitadores(Request $request)
     {
         $tipo = $request->query('tipo');
         $id = $request->query('id');
         $dignidad = $request->query('dignidad');
-        $procesoEleccion = $request->query('proceso_eleccion'); 
+        
+        // Recibimos de forma estricta el proceso desde el botón de la vista
+        // Si por alguna razón no viene (alguien escribe la URL a mano), cae a 'generales' por defecto
+        $procesoEleccion = $request->query('proceso_eleccion', 'generales');
 
-        $query = User::where('role', 'digitador')->with(['mesa.recinto.parroquia.canton']);
+        // Construimos la consulta base
+        $query = User::where('role', 'digitador')
+                    ->where('proceso_eleccion', $procesoEleccion) // Filtro matador por proceso
+                    ->with(['mesa.recinto.parroquia.canton.provincia']);
 
         if ($tipo && $id) {
             $query->where($tipo . '_id', $id);
@@ -143,38 +150,29 @@ class UserGenerationController extends Controller
             $query->where('dignidad_asignada', $dignidad);
         }
 
-        if ($procesoEleccion) {
-            // Se adapta dinámicamente si el filtro busca en la tabla users
-            $procesoUser = ($procesoEleccion === 'primarias') ? 'primaria' : 'general';
-            $query->where('tipo_proceso', $procesoUser);
-        }
-
         $digitadores = $query->orderBy('name', 'asc')->get();
 
         if ($request->has('pdf')) {
-            return $this->exportarPDF($digitadores, $tipo, $id, $dignidad);
+            return $this->exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion);
         }
 
-        return view('admin.digitadores.index', compact('digitadores', 'tipo', 'id', 'dignidad'));
+        return view('admin.digitadores.index', compact('digitadores', 'tipo', 'id', 'dignidad', 'procesoEleccion'));
     }
 
-    private function exportarPDF($digitadores, $tipo, $id, $dignidad)
+    private function exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion)
     {
         if ($digitadores->isEmpty()) {
             return back()->with('error', 'No hay datos disponibles para generar el reporte PDF.');
         }
 
-        // Estructuramos un título dinámico para el encabezado del documento
-        $tituloReporte = "CREDENCIALES DE ACCESO - DIGITADORES";
+        $tituloReporte = "CREDENCIALES DE ACCESO - DIGITADORES (" . strtoupper($procesoEleccion) . ")";
         $subtitulo = "Territorio: " . ucfirst($tipo) . " (ID: $id) | Dignidad: " . ($dignidad ?? 'TODAS');
 
-        // Cargamos la vista blade específica para el PDF pasándole las variables
         $pdf = Pdf::loadView('admin.digitadores.pdf', compact('digitadores', 'tituloReporte', 'subtitulo'))
-                  ->setPaper('a4', 'portrait') // Configuración de hoja estándar para impresión
+                  ->setPaper('a4', 'portrait')
                   ->setWarnings(false);
 
-        // Retorna el archivo directamente al navegador con un nombre limpio y estandarizado
-        $nombreArchivo = "credenciales_digitadores_" . ($tipo) . "_" . ($dignidad ?? 'todas') . ".pdf";
+        $nombreArchivo = "credenciales_digitadores_" . $procesoEleccion . "_" . $tipo . ".pdf";
         return $pdf->stream($nombreArchivo);
     }
 

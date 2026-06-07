@@ -33,8 +33,15 @@ class ActaController extends Controller
     {
         $user = auth()->user();
         
-        // Si es admin nacional ve todas, si es provincial u otro, solo la suya
-        $provincias = $user->esAdminGeneral() ? Provincia::orderBy('nombre')->get() : Provincia::where('id', $user->provincia_id)->get();
+        $provincias = $user->esAdminGeneral() 
+            ? Provincia::orderBy('nombre')->get() 
+            : Provincia::where('id', $user->provincia_id)->get();
+        
+        // CORRECCIÓN: Si es digitador, cargamos su mesa asignada con el total de electores
+        $mesaAsignada = null;
+        if ($user->esDigitador() && $user->mesa_id) {
+            $mesaAsignada = Mesa::with('recinto.parroquia.canton.provincia')->find($user->mesa_id);
+        }
         
         $jurisdiccion = [
             'esDigitador'       => $user->esDigitador(),
@@ -47,7 +54,8 @@ class ActaController extends Controller
             'dignidad_asignada' => $user->dignidad_asignada 
         ];
 
-        return view('actas.create', compact('provincias', 'user', 'jurisdiccion'));
+        // Enviamos $mesaAsignada a la vista actas.create
+        return view('actas.create', compact('provincias', 'user', 'jurisdiccion', 'mesaAsignada'));
     }
 
     public function show(Acta $acta)
@@ -125,9 +133,11 @@ class ActaController extends Controller
         if (!$dignidadRaw) return response()->json([]);
         $dignidad = strtoupper(trim($dignidadRaw));
 
-        $query = Candidato::with('partido')->where('dignidad', $dignidad);
+        // CORRECCIÓN SECCIÓN CANDIDATOS: Filtro estricto por dignidad Y proceso_eleccion del usuario logueado
+        $query = Candidato::with('partido')
+            ->where('dignidad', $dignidad)
+            ->where('proceso_eleccion', $user->proceso_eleccion); // <--- Bloquea la mezcla
 
-        // DETERMINACIÓN DE VARIABLES TERRITORIALES (Dinámicas para Admin, Fijas para Digitador)
         $provincia_id = $user->esAdminGeneral() ? $request->query('provincia_id') : $user->provincia_id;
         $canton_id = ($user->esAdminGeneral() || !$user->canton_id) ? $request->query('canton_id') : $user->canton_id;
         $parroquia_id = ($user->esAdminGeneral() || !$user->parroquia_id) ? $request->query('parroquia_id') : $user->parroquia_id;

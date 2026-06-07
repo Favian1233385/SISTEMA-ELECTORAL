@@ -136,14 +136,13 @@
                                     </form>
 
                                     {{-- BOTÓN 2: VER / IMPRIMIR --}}
-                                    @if(Route::has('admin.ver.digitadores'))
-                                        <a href="{{ route('admin.ver.digitadores', ['tipo' => 'provincia', 'id' => $provincia->id]) }}" 
-                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-black text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg transition-all shadow-md flex items-center justify-center">
-                                            👁️ Ver / Imprimir Digitadores
-                                        </a>
-                                    @else
-                                        <div class="text-[9px] text-red-500 text-center italic">Ruta de visualización pendiente de configurar</div>
-                                    @endif
+                                    <div class="mt-2">
+                                        <button type="button" 
+                                                onclick="irAVerDigitadores(this, '{{ $provincia->id }}')"
+                                                class="w-full bg-slate-800 hover:bg-slate-900 text-black text-center text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg transition-all shadow-md block">
+                                            👁️ VER / IMPRIMIR DIGITADORES
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <hr class="my-2 border-gray-100">
@@ -159,4 +158,20 @@
             </div>
         </div>
     </div>
+    <script>
+    function irAVerDigitadores(boton, provinciaId) {
+        // Buscamos el formulario de generación que está justo arriba de este botón
+        const contenedor = boton.closest('.border');
+        const selectorProceso = contenedor.querySelector('select[name="proceso_eleccion"]');
+        
+        // Obtenemos si seleccionó 'generales' o 'primarias' en ese instante
+        const procesoSeleccionado = selectorProceso ? selectorProceso.value : 'generales';
+
+        // Construimos la URL exacta con el parámetro real elegido en la interfaz
+        const urlDestino = `/ver-digitadores?tipo=provincia&id=${provinciaId}&proceso_eleccion=${procesoSeleccionado}`;
+        
+        // Redireccionamos al usuario a la consulta correcta
+        window.location.href = urlDestino;
+    }
+    </script>
 </x-app-layout>
