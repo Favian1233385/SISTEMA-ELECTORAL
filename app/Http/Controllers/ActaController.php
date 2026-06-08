@@ -44,7 +44,7 @@ class ActaController extends Controller
                 ->exists();
 
             if ($yaExisteActa) {
-                return redirect()->route('actas.index')->with('error', 'Acceso denegado: Usted ya ha ingresado y guardado el acta asignada a su usuario de forma exitosa. El panel de digitación se encuentra bloqueado.');
+                return redirect()->route('dashboard')->with('error', 'Acceso denegado: Su acta asignada ya fue guardada con éxito en el sistema. El panel de digitación se encuentra bloqueado de forma definitiva.');
             }
         }
         // -----------------------------------------------------------------------------------------
@@ -273,7 +273,7 @@ class ActaController extends Controller
 
         // 5. BLINDAJE DE SEGURIDAD EN BACKEND: Evitar duplicación enviando a la vista index con mensaje de error
         if (Acta::where('mesa_id', $mesa_id_final)->where('dignidad', $dignidad_final)->exists()) {
-            return redirect()->route('actas.index')->with('error', 'Acceso denegado: Usted ya ha ingresado y guardado el acta asignada a su usuario de forma exitosa. El panel de digitación se encuentra bloqueado.');
+            return redirect()->route('dashboard')->with('error', 'Acceso denegado: Su acta asignada ya fue guardada con éxito en el sistema. El panel de digitación se encuentra bloqueado de forma definitiva.');
         }
 
         // 6. Semáforo de validación amoldado a las opciones estrictas de tu ENUM

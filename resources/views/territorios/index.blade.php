@@ -23,6 +23,7 @@
                         <input type="hidden" name="tipo" value="{{ session('tipo_error') }}">
                         <input type="hidden" name="id" value="{{ session('id_error') }}">
                         <input type="hidden" name="reemplazar" value="1">
+                        <input type="hidden" name="dignidad" value="{{ session('dignidad_error') }}"> {{-- CORRECCIÓN: Evita el fallo de sobreescritura --}}
                         <input type="hidden" name="proceso_eleccion" value="{{ session('proceso_eleccion_error', 'generales') }}">
                         <button type="submit" class="underline font-bold text-blue-900">¿Deseas actualizarlos de todas formas?</button>
                     </form>
@@ -35,7 +36,7 @@
                 </div>
             @endif
 
-            {{-- 2. BLOQUE DE CARGA MASIVA MODIFICADO --}}
+            {{-- 2. BLOQUE DE CARGA MASIVA --}}
             <div class="mb-8 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-blue-100">
                 <div class="flex items-center mb-4">
                     <div class="p-2 bg-blue-500 rounded-lg mr-3">
@@ -53,7 +54,6 @@
                 <form action="{{ route('import.electoral') }}" method="POST" enctype="multipart/form-data" class="flex flex-col lg:flex-row items-end gap-4 flex-wrap">
                     @csrf
                     
-                    {{-- Selector del tipo de proceso electoral --}}
                     <div class="w-full md:w-64">
                         <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Proceso</label>
                         <select name="proceso_eleccion" required 
@@ -63,7 +63,6 @@
                         </select>
                     </div>
 
-                    {{-- 📥 NUEVO SELECTOR INYECTADO: Filtro Dinámico de Provincia para el SaaS --}}
                     <div class="w-full md:w-64">
                         <label class="block text-sm font-medium text-gray-700 mb-2">Provincia a Importar</label>
                         <select name="provincia_id" required 
@@ -75,14 +74,12 @@
                         </select>
                     </div>
 
-                    {{-- Campo de selección de archivo --}}
                     <div class="flex-1 w-full min-w-[250px]">
                         <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar archivo Excel</label>
                         <input type="file" name="file" required
                             class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                     </div>
 
-                    {{-- Botón de envío --}}
                     <button type="submit" 
                         class="w-full lg:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 flex items-center justify-center shadow-lg shadow-blue-200 whitespace-nowrap">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,7 +106,7 @@
                                 </div>
                                 
                                 <div class="space-y-2 mb-3">
-                                    {{-- BOTÓN 1: GENERAR USUARIOS --}}
+                                    {{-- FORMULARIO GENERAR USUARIOS --}}
                                     <form action="{{ route('usuarios.generar') }}" method="POST" onsubmit="return confirm('¿Deseas generar automáticamente los usuarios para las mesas de la provincia de {{ $provincia->nombre }}?')">
                                         @csrf
                                         <input type="hidden" name="tipo" value="provincia">
@@ -122,7 +119,7 @@
                                             </select>
                                         </div>
                                         <div class="mb-2">
-                                            <select name="dignidad" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 font-bold uppercase">
+                                            <select name="dignidad" id="dignidad_prov_{{ $provincia->id }}" required class="w-full text-[10px] rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 font-bold uppercase">
                                                 <option value="">-- SELECCIONAR DIGNIDAD --</option>
                                                 <option value="PREFECTO">PREFECTO</option>
                                                 <option value="ALCALDE">ALCALDE</option>
@@ -130,13 +127,15 @@
                                                 <option value="JUNTA PARROQUIAL">JUNTA PARROQUIAL</option>
                                             </select>
                                         </div>
-                                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-black text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg transition-all shadow-md">
+                                        {{-- CORRECCIÓN: text-white para garantizar contraste --}}
+                                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg transition-all shadow-md">
                                             ⚙️ Generar Usuarios Provincia
                                         </button>
                                     </form>
 
-                                    {{-- BOTÓN 2: VER / IMPRIMIR --}}
+                                    {{-- BOTÓN VER / IMPRIMIR --}}
                                     <div class="mt-2">
+                                        {{-- CORRECCIÓN: text-white para garantizar contraste --}}
                                         <button type="button" 
                                                 onclick="irAVerDigitadores(this, '{{ $provincia->id }}')"
                                                 class="w-full bg-slate-800 hover:bg-slate-900 text-black text-center text-[10px] uppercase tracking-widest font-bold py-2 rounded-lg transition-all shadow-md block">
@@ -158,20 +157,25 @@
             </div>
         </div>
     </div>
-    <script>
-    function irAVerDigitadores(boton, provinciaId) {
-        // Buscamos el formulario de generación que está justo arriba de este botón
-        const contenedor = boton.closest('.border');
-        const selectorProceso = contenedor.querySelector('select[name="proceso_eleccion"]');
-        
-        // Obtenemos si seleccionó 'generales' o 'primarias' en ese instante
-        const procesoSeleccionado = selectorProceso ? selectorProceso.value : 'generales';
 
-        // Construimos la URL exacta con el parámetro real elegido en la interfaz
-        const urlDestino = `/ver-digitadores?tipo=provincia&id=${provinciaId}&proceso_eleccion=${procesoSeleccionado}`;
-        
-        // Redireccionamos al usuario a la consulta correcta
-        window.location.href = urlDestino;
-    }
+    <script>
+        function irAVerDigitadores(boton, provinciaId) {
+            const contenedor = boton.closest('.border');
+            const selectorProceso = contenedor.querySelector('select[name="proceso_eleccion"]');
+            const selectorDignidad = document.getElementById(`dignidad_prov_${provinciaId}`);
+            
+            const procesoSeleccionado = selectorProceso ? selectorProceso.value : 'generales';
+            const dignidadSeleccionada = selectorDignidad ? selectorDignidad.value : '';
+
+            // CORRECCIÓN: Validación estricta antes de redirigir
+            if (!dignidadSeleccionada) {
+                alert('Por favor, seleccione una dignidad en la lista desplegable antes de consultar los digitadores.');
+                if (selectorDignidad) selectorDignidad.focus();
+                return;
+            }
+
+            const urlDestino = `/ver-digitadores?tipo=provincia&id=${provinciaId}&proceso_eleccion=${procesoSeleccionado}&dignidad=${dignidadSeleccionada}`;
+            window.location.href = urlDestino;
+        }
     </script>
 </x-app-layout>

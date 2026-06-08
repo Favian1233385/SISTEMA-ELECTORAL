@@ -145,27 +145,30 @@
                             <div class="bg-slate-100 text-slate-500 text-center py-2 rounded-lg text-xs font-semibold italic">
                                 Modo: Solo Consulta
                             </div>
+                            {{-- BLINDAJE INTERFAZ: El Historial de Ingresos se muestra únicamente a perfiles de consulta/administración --}}
+                            <a href="{{ route('actas.index') }}" class="text-gray-500 text-center font-normal hover:text-gray-700 mt-1">Historial de Ingresos</a>
                         @endif
-                        <a href="{{ route('actas.index') }}" class="text-gray-500 text-center font-normal hover:text-gray-700 mt-1">Historial de Ingresos</a>
                     </div>
                 </div>
 
-                {{-- 6. MONITOR DE RESULTADOS: TODOS --}}
-                <div class="bg-white rounded-2xl shadow-lg border border-slate-100 border-l-4 border-l-indigo-600 p-6 transition-all duration-300 hover:shadow-indigo-200 hover:-translate-y-1 group">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="p-3 bg-indigo-50 rounded-lg group-hover:bg-indigo-600 transition">
-                            <svg class="w-6 h-6 text-indigo-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
+                {{-- 6. MONITOR DE RESULTADOS (OCULTO PARA EL DIGITADOR) --}}
+                @if(Auth::user()->role !== 'digitador')
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 border-l-4 border-l-indigo-600 p-6 transition-all duration-300 hover:shadow-indigo-200 hover:-translate-y-1 group">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="p-3 bg-indigo-50 rounded-lg group-hover:bg-indigo-600 transition">
+                                <svg class="w-6 h-6 text-indigo-600 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                            <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider">Visualización</span>
                         </div>
-                        <span class="text-xs font-bold text-indigo-500 uppercase tracking-wider">Visualización</span>
+                        <h4 class="text-gray-800 font-extrabold text-lg mb-2">Monitor Público</h4>
+                        <div class="flex flex-col gap-1.5 text-sm text-indigo-600 font-medium">
+                            <a href="{{ route('resultados.index') }}" class="font-bold hover:underline">Ver Resultados →</a>
+                            <span class="text-gray-400 font-normal">Actualización en tiempo real</span>
+                        </div>
                     </div>
-                    <h4 class="text-gray-800 font-extrabold text-lg mb-2">Monitor Público</h4>
-                    <div class="flex flex-col gap-1.5 text-sm text-indigo-600 font-medium">
-                        <a href="{{ route('resultados.index') }}" class="font-bold hover:underline">Ver Resultados →</a>
-                        <span class="text-gray-400 font-normal">Actualización en tiempo real</span>
-                    </div>
-                </div>
+                @endif
 
             </div> 
         </div>

@@ -143,7 +143,7 @@
     </div>
 
     <!-- Modal de Seguridad Estricta para Limpieza de Datos -->
-    <div id="modalLimpieza" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black bg-opacity-50 p-4" style="display: none; align-items: center; justify-content: center;">
+    <div id="modalLimpieza" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 border-t-4 border-red-600">
             <h3 class="text-lg font-bold text-gray-900 mb-2">🚨 Acción Altamente Crítica</h3>
             <p class="text-sm text-gray-600 mb-4">
@@ -185,11 +185,19 @@
         function abrirModalLimpieza(urlAction, nombreProceso) {
             document.getElementById('formLimpieza').action = urlAction;
             document.getElementById('modalProcesoNombre').innerText = nombreProceso;
-            document.getElementById('modalLimpieza').classList.remove('hidden');
+            
+            // CAMBIO AQUÍ: Cambia 'hidden' por 'flex' para mostrarlo centrado
+            const modal = document.getElementById('modalLimpieza');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         function cerrarModalLimpieza() {
-            document.getElementById('modalLimpieza').classList.add('hidden');
+            // CAMBIO AQUÍ: Cambia 'flex' por 'hidden' para ocultarlo por completo
+            const modal = document.getElementById('modalLimpieza');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            
             document.getElementById('formLimpieza').reset();
         }
     </script>

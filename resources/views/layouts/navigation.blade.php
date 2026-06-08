@@ -23,16 +23,14 @@
                         </x-nav-link>
                     @endif
 
-                    {{-- Solo el digitador tiene acceso visual directo a Actas / Votos --}}
-                    @if(auth()->user()->esDigitador())
-                        <x-nav-link :href="route('actas.create')" :active="request()->routeIs('actas.*')">
-                            {{ __('Actas / Votos') }}
+                    {{-- ELIMINADO: El digitador ya no ve la pestaña "Actas / Votos" aquí por desuso --}}
+                    
+                    {{-- BLINDAJE DE INTERFAZ: Se oculta la pestaña Resultados por completo al digitador --}}
+                    @if(!auth()->user()->esDigitador())
+                        <x-nav-link :href="route('resultados.index')" :active="request()->routeIs('resultados.index')">
+                            {{ __('Resultados') }}
                         </x-nav-link>
                     @endif
-                    
-                    <x-nav-link :href="route('resultados.index')" :active="request()->routeIs('resultados.index')">
-                        {{ __('Resultados') }}
-                    </x-nav-link>
 
                     {{-- BLINDAJE INTERFAZ: Pestañas EXCLUSIVAS para el Súper Administrador General --}}
                     @if(auth()->user()->role === 'admin')
@@ -101,15 +99,14 @@
                 </x-responsive-nav-link>
             @endif
 
-            @if(auth()->user()->esDigitador())
-                <x-responsive-nav-link :href="route('actas.create')" :active="request()->routeIs('actas.*')">
-                    {{ __('Actas / Votos') }}
+            {{-- ELIMINADO: Menú móvil también remueve "Actas / Votos" para el digitador --}}
+
+            {{-- BLINDAJE DE INTERFAZ RESPONSIVE: Se oculta Resultados al digitador --}}
+            @if(!auth()->user()->esDigitador())
+                <x-responsive-nav-link :href="route('resultados.index')" :active="request()->routeIs('resultados.index')">
+                    {{ __('Resultados') }}
                 </x-responsive-nav-link>
             @endif
-
-            <x-responsive-nav-link :href="route('resultados.index')" :active="request()->routeIs('resultados.index')">
-                {{ __('Resultados') }}
-            </x-responsive-nav-link>
 
             {{-- BLINDAJE INTERFAZ RESPONSIVE: Oculto para Administradores Provinciales y Cantonales --}}
             @if(auth()->user()->role === 'admin')

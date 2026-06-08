@@ -106,7 +106,13 @@ class TerritorioController extends Controller
         // 3. Si seleccionó un CANTÓN, mostramos sus PARROQUIAS
         if ($request->has('canton')) {
             $canton = \App\Models\Canton::findOrFail($request->canton);
-            $parroquias = \App\Models\Parroquia::where('canton_id', $canton->id)->withCount('recintos')->get();
+            
+            // Agregamos select para asegurar la integridad de los campos esenciales
+            $parroquias = \App\Models\Parroquia::select('id', 'nombre', 'canton_id')
+                ->where('canton_id', $canton->id)
+                ->withCount('recintos')
+                ->get();
+                
             return view('territorios.parroquias', compact('canton', 'parroquias'));
         }
 
