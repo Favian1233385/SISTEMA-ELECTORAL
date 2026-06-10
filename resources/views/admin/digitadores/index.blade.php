@@ -154,11 +154,11 @@
                                             {{ $user->email }}
                                         </code>
                                     </td>
-                                    
-                                    <td class="px-2 py-4 text-center">
-                                        <span class="bg-yellow-100 text-black px-2 py-1 rounded font-mono font-black text-xs border border-yellow-300 inline-block">
-                                            voto2026
-                                        </span>
+                                   
+                                    <td>
+                                        <code style="padding: 2px 6px; background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
+                                            {{ $user->password_plain ?? 'voto2026' }}
+                                        </code>
                                     </td>
                                     
                                     <td class="px-4 py-4 text-[11px] leading-normal text-gray-600 break-words">

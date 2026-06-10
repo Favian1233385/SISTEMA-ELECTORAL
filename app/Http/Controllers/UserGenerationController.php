@@ -14,38 +14,49 @@ use Barryvdh\DomPDF\Facade\Pdf;
 class UserGenerationController extends Controller
 {
     /**
+     * Mapeo seguro de tipos de territorio permitidos para evitar inyecciones SQL en columnas.
+     */
+    protected $territoriosPermitidos = [
+        'provincia' => 'provincia_id',
+        'canton'    => 'canton_id',
+        'parroquia' => 'parroquia_id'
+    ];
+
+    /**
      * Genera usuarios digitadores basados en la división territorial y dignidad.
      */
     public function generarDigitadores(Request $request)
     {
         Log::info("Iniciando generación de digitadores en cascada", $request->all());
 
+        // BP: Validación estricta antes de procesar cualquier dato
+        $request->validate([
+            'tipo'             => 'required|string|in:provincia,canton,parroquia',
+            'id'               => 'required|integer',
+            'dignidad'         => 'required|string|min:3',
+            'proceso_eleccion' => 'nullable|string|in:primarias,generales'
+        ]);
+
         $tipo = $request->input('tipo'); 
         $territorioId = $request->input('id');
-        
-        // CORRECCIÓN: Estandarizamos a MAYÚSCULAS desde el inicio para evitar fallos de coincidencia
-        $dignidad = $request->input('dignidad') ? strtoupper(trim($request->input('dignidad'))) : null;
+        $dignidad = strtoupper(trim($request->input('dignidad')));
         $procesoRequest = $request->input('proceso_eleccion', 'generales'); 
-
-        if (!$dignidad) {
-            Log::warning("Generación abortada: No se recibió la dignidad.");
-            return back()->with('error', 'Debe seleccionar una dignidad.');
-        }
 
         $procesoMesa = ($procesoRequest === 'primarias') ? 'primarias' : 'generales';
         $procesoUser = ($procesoRequest === 'primarias') ? 'primaria' : 'general';
 
         $query = Mesa::where('proceso_eleccion', $procesoMesa)->with(['recinto.parroquia.canton.provincia']);
 
-        if ($tipo == 'provincia') {
+        // Aplicación del filtro en cascada de forma segura
+        if ($tipo === 'provincia') {
             $query->whereHas('recinto.parroquia.canton', function($q) use ($territorioId) {
                 $q->where('provincia_id', $territorioId);
             });
-        } elseif ($tipo == 'canton') {
+        } elseif ($tipo === 'canton') {
             $query->whereHas('recinto.parroquia', function($q) use ($territorioId) {
                 $q->where('canton_id', $territorioId);
             });
-        } elseif ($tipo == 'parroquia') {
+        } elseif ($tipo === 'parroquia') {
             $query->whereHas('recinto', function($q) use ($territorioId) {
                 $q->where('parroquia_id', $territorioId);
             });
@@ -84,22 +95,20 @@ class UserGenerationController extends Controller
 
                 $tagProceso = ($procesoUser === 'primaria') ? ' (Primarias)' : '';
                 $nombreRecintoCorto = Str::limit($recinto->nombre, 25, '...');
-                
-                // Formateamos el nombre estéticamente pero la columna conserva el valor en Mayúsculas puras
                 $nombreDigitador = "Digitador " . ucfirst(strtolower($dignidad)) . " - " . $nombreRecintoCorto . " - M: " . $mesa->numero . " (" . substr($mesa->genero, 0, 3) . ")" . $tagProceso;
-
-                // AJUSTE QUIRÚRGICO: Garantizar asignación correcta de jerarquía territorial sin importar la dignidad elegida
+                // GENERACIÓN DE CONTRASEÑA DINÁMICA ALEATORIA (6 dígitos)
+                $passwordAleatorio = (string) rand(100000, 999999);
                 User::updateOrCreate(
                     ['email' => $email],
                     [
                         'name'              => $nombreDigitador,
-                        'password'          => Hash::make('voto2026'), 
+                        'password'          => Hash::make($passwordAleatorio), 
+                        'password_plain'    => $passwordAleatorio,
                         'role'              => 'digitador',
                         'proceso_eleccion'  => $procesoMesa,
                         'tipo_proceso'      => $procesoUser,
                         'mesa_id'           => $mesa->id,
                         'dignidad_asignada' => $dignidad, 
-                        // Se extrae la provincia directamente de la estructura real de la mesa procesada
                         'provincia_id'      => $canton->provincia_id, 
                         'canton_id'         => $canton->id,
                         'parroquia_id'      => $parroquia->id,
@@ -110,7 +119,7 @@ class UserGenerationController extends Controller
             }
 
             DB::commit();
-            return back()->with('success', "Se han generado exitosamente $creados usuarios digitadores para el territorio de tipo [$tipo] en el proceso de elecciones " . ($procesoUser === 'primaria' ? 'primarias.' : 'generales.'));
+            return back()->with('success', "Se han generado exitosamente $creados usuarios digitadores para el territorio de tipo [$tipo] en el proceso electoral.");
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -123,80 +132,90 @@ class UserGenerationController extends Controller
     }
 
     /**
-     * Vista para listar e informar el aislamiento total de credenciales.
-     * REEMPLAZAR ESTE MÉTODO COMPLETO
+     * Vista para listar e informar el aislamiento total de credenciales de forma optimizada.
      */
     public function verDigitadores(Request $request)
-
     {
+        // BP: Validación de parámetros en consultas de lectura
+        $request->validate([
+            'tipo'             => 'nullable|string|in:provincia,canton,parroquia',
+            'id'               => 'nullable|integer',
+            'proceso_eleccion' => 'nullable|string|in:primarias,generales',
+            'dignidad'         => 'nullable|string'
+        ]);
+
         $tipo = $request->query('tipo');
-
         $id = $request->query('id');
-
         $procesoEleccion = $request->query('proceso_eleccion', 'generales');
-        // Estandarizamos la captura en MAYÚSCULAS
-
         $dignidad = $request->query('dignidad') ? strtoupper(trim($request->query('dignidad'))) : null;
 
         $query = User::where('role', 'digitador')
-
                     ->where('proceso_eleccion', $procesoEleccion)
-
                     ->with(['mesa.recinto.parroquia.canton.provincia']);
-        // LOGICA DE FILTRADO INTELIGENTE
-        if ($tipo && $id) {
-            if ($tipo === 'parroquia') {
-                // Busca de ambas formas para asegurar que encuentre los 2 digitadores sin importar la estructura
-                $query->where(function($q) use ($id) {
-                    $q->where('parroquia_id', $id)
-                      ->orWhereHas('mesa.recinto', function($subQ) use ($id) {
-                          $subQ->where('parroquia_id', $id);
-                      });
-                });
-            } else {
-                // Para cantón y provincia el mapeo directo sigue siendo limpio y funcional
-                $query->where($tipo . '_id', $id);
-            }
+
+        // BP: Optimización drástica de rendimiento y mitigación SQL injection
+        if ($tipo && $id && array_key_exists($tipo, $this->territoriosPermitidos)) {
+            $columnaColocada = $this->territoriosPermitidos[$tipo];
+            $query->where($columnaColocada, $id);
         }
+
         if ($dignidad) {
             $query->where('dignidad_asignada', $dignidad);
         }
-        // Auditar que el cruce de territorio y dignidad funcione
-        Log::info("Consulta adaptativa de digitadores ejecutada", [
+
+        Log::info("Consulta adaptativa de digitadores ejecutada con alta eficiencia", [
             'alcance_territorio' => $tipo,
             'territorio_id'      => $id,
-            'dignidad_filtrada'  => $dignidad ?? 'TODAS',
-            'proceso'            => $procesoEleccion
+            'dignidad_filtrada'  => $dignidad ?? 'TODAS'
         ]);
 
         $digitadores = $query->orderBy('name', 'asc')->get();
+
+        // CAMBIO CORRECTIVO: Mutar la colección antes de enviarla a la vista 
+        // para asegurar que 'password_plain' jamás llegue vacío al HTML de la tabla web
+        $digitadores->transform(function ($user) {
+            if (empty($user->password_plain)) {
+                $user->password_plain = 'N/A';
+            }
+            return $user;
+        });
+
         if ($request->has('pdf')) {
             return $this->exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion);
         }
+
         return view('admin.digitadores.index', compact('digitadores', 'tipo', 'id', 'dignidad', 'procesoEleccion'));
     }
 
+    /**
+     * Limpieza controlada de usuarios por filtros territoriales.
+     */
     public function limpiarDigitadores(Request $request)
     {
         Log::info("Iniciando depuración quirúrgica de digitadores", $request->all());
 
+        $request->validate([
+            'tipo'             => 'nullable|string|in:provincia,canton,parroquia',
+            'id'               => 'nullable|integer',
+            'dignidad'         => 'nullable|string',
+            'proceso_eleccion' => 'nullable|string|in:primarias,generales'
+        ]);
+
         $tipo = $request->input('tipo'); 
         $territorioId = $request->input('id');
-        // Forzamos conversión a mayúsculas para que coincida con el valor guardado
-        $dignidad = $request->input('dignidad') ? strtoupper($request->input('dignidad')) : null;
+        $dignidad = $request->input('dignidad') ? strtoupper(trim($request->input('dignidad'))) : null;
         $procesoRequest = $request->input('proceso_eleccion', 'generales');
 
         $procesoMesa = ($procesoRequest === 'primarias') ? 'primarias' : 'generales';
 
         try {
-            $query = User::where('role', 'digitador')
-                         ->where('proceso_eleccion', $procesoMesa);
+            $query = User::where('role', 'digitador')->where('proceso_eleccion', $procesoMesa);
 
-            if ($tipo && $territorioId) {
-                $query->where($tipo . '_id', $territorioId);
+            // BP: Uso estricto del arreglo seguro para evitar alteración del query builder
+            if ($tipo && $territorioId && array_key_exists($tipo, $this->territoriosPermitidos)) {
+                $query->where($this->territoriosPermitidos[$tipo], $territorioId);
             }
 
-            // CORRECCIÓN: Filtro limpio por dignidad en mayúsculas
             if ($dignidad) {
                 $query->where('dignidad_asignada', $dignidad);
             }
@@ -210,26 +229,22 @@ class UserGenerationController extends Controller
             $query->delete();
 
             Log::info("Depuración completada exitosamente.", [
-                'proceso' => $procesoMesa,
-                'territorio_tipo' => $tipo,
-                'territorio_id' => $territorioId,
-                'dignidad' => $dignidad ?? 'TODAS',
                 'cantidad_eliminados' => $totalAEliminar
             ]);
 
-            $mensajeExito = "Se han eliminado con éxito $totalAEliminar usuarios digitadores asignados a la dignidad de [" . ($dignidad ?? 'TODAS') . "] en el territorio seleccionado para el proceso de elecciones " . ($procesoMesa === 'primarias' ? 'primarias.' : 'generales.');
-
-            return back()->with('success', $mensajeExito);
+            return back()->with('success', "Se han eliminado con éxito $totalAEliminar usuarios digitadores.");
 
         } catch (\Exception $e) {
             Log::error("Error crítico en la limpieza de digitadores", [
-                'mensaje' => $e->getMessage(),
-                'linea' => $e->getLine()
+                'mensaje' => $e->getMessage()
             ]);
             return back()->with('error', 'Error al intentar depurar los usuarios: ' . $e->getMessage());
         }
     }
 
+   /**
+     * Genera el PDF y aplica la purga automática de seguridad inmediatamente.
+     */
     private function exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion)
     {
         if ($digitadores->isEmpty()) {
@@ -239,11 +254,17 @@ class UserGenerationController extends Controller
         $tituloReporte = "CREDENCIALES DE ACCESO - DIGITADORES (" . strtoupper($procesoEleccion) . ")";
         $subtitulo = "Territorio: " . ucfirst($tipo) . " (ID: $id) | Dignidad: " . ($dignidad ?? 'TODAS');
 
+        // 1. COMPILAR EL PDF EN MEMORIA RAM (Lleva las claves legibles reales)
         $pdf = Pdf::loadView('admin.digitadores.pdf', compact('digitadores', 'tituloReporte', 'subtitulo'))
                   ->setPaper('a4', 'portrait')
                   ->setWarnings(false);
-
-        $nombreArchivo = "credenciales_digitadores_" . $procesoEleccion . "_" . $tipo . ".pdf";
-        return $pdf->stream($nombreArchivo);
-    }
+        // 2. PURGA INMEDIATA EN LA BASE DE DATOS (Antes de enviar el archivo al navegador)
+        $userIds = $digitadores->pluck('id');
+        User::whereIn('id', $userIds)->update(['password_plain' => null]);
+        Log::info("Seguridad Automatizada: Claves planas eliminadas con éxito tras compilar el PDF.", [
+            'cantidad_usuarios_protegidos' => $userIds->count()
+        ]);
+        // 3. ENVIAR EL PDF COMPILADO AL NAVEGADOR
+        return $pdf->stream("credenciales_digitadores_{$procesoEleccion}_{$tipo}.pdf");
+    }  
 }

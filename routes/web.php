@@ -16,7 +16,9 @@ use App\Http\Controllers\UserGenerationController;
 use Illuminate\Support\Facades\Route;
 
 // --- RUTAS PÚBLICAS ---
-Route::get('/', function () { return view('welcome'); });
+Route::get('/', function () {
+    return redirect('/login');
+});
 
 // --- RUTAS PROTEGIDAS (Requieren estar logueado) ---
 Route::middleware(['auth', 'verified'])->group(function () {

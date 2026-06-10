@@ -16,11 +16,11 @@ class DatabaseSeeder extends Seeder
     {
         // Crear el usuario administrador automáticamente
         \App\Models\User::create([
-            'name' => 'Administrador',
-            'email' => 'admin123@gmail.com',
-            'password' => bcrypt('admin12344'), // Pon la clave que desees aquí
+            'name'     => 'Administrador',
+            'email'    => 'raul_198867@hotmail.com', // <-- COLOCA TU CORREO REAL AQUÍ
+            'password' => Hash::make('Arutam345@*Sistema'), // <-- COLOCA TU NUEVA CLAVE SEGURA AQUÍ
+            'role'     => 'admin', // Garantiza que tenga el rol que tu controlador busca
         ]);
-        
 
         // Llamamos al seeder de los territorios que ya tenías
         $this->call([

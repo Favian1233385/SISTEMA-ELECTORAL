@@ -20,6 +20,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'password_plain',
         'role',              
         'proceso_eleccion',     
         'dignidad_asignada', 
@@ -39,7 +40,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'ver_prefectos' => 'boolean',
-        
+        'password_plain' => 'string',
     ];
 
     // --- MÉTODOS DE LÓGICA DE ROLES CORREGIDOS ---

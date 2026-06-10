@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Candidato;
 use App\Models\Acta;
-use App\Models\Provincia; // Añadir
-use App\Models\Canton;    // Añadir
-use App\Models\Parroquia; // Añadir
-use App\Models\Recinto;   // Añadir
-use App\Models\Mesa;      // Añadir
+use App\Models\Provincia; 
+use App\Models\Canton;    
+use App\Models\Parroquia; 
+use App\Models\Recinto;   
+use App\Models\Mesa;      
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request; // Añadir para los formularios
 
