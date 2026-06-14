@@ -56,8 +56,9 @@
             border-bottom: 1px solid #e2e8f0;
         }
         .resumen-votos {
-            margin-top: 30px;
+            margin-top: 20px;
             width: 100%;
+            border-collapse: collapse;
         }
         .resumen-votos td {
             padding: 8px;
@@ -73,7 +74,7 @@
             color: #94a3b8;
         }
         .firmas {
-            margin-top: 80px;
+            margin-top: 60px;
             width: 100%;
         }
         .firma-box {
@@ -85,7 +86,6 @@
             margin-top: 50px;
             padding-top: 5px;
         }
-        /* Estilo para el badge de escrutinio */
         .escrutinio-badge {
             color: #1e40af;
             font-weight: bold;
@@ -96,7 +96,7 @@
 <body>
 
     <div class="header">
-        <h1>SISTEMA DE GESTIÓN ELECTORAL - ECUADOR </h1>
+        <h1>SISTEMA DE GESTIÓN ELECTORAL - ECUADOR</h1>
         <p>REPORTE OFICIAL DE RESULTADOS: {{ strtoupper($dignidadSeleccionada) }}</p>
     </div>
 
@@ -108,7 +108,8 @@
         <tr>
             <td><strong>Generado por:</strong> {{ $usuario }}</td>
             <td class="escrutinio-badge">
-                <strong>Escrutinio:</strong> {{ $totalActas }} Actas ({{ $granTotalVotos > 0 ? number_format(($totalActas / max($totalActas, 1)) * 100, 1) : '0.0' }}%)
+                <!-- Se corrigió el cálculo ficticio de porcentaje por la variable real calculada de participación -->
+                <strong>Escrutinio:</strong> {{ $totalActas }} Actas ({{ $porcentajeParticipacion }}% Participación)
             </td>
         </tr>
     </table>
@@ -131,19 +132,32 @@
                     <td style="font-style: italic;">{{ $candidato->partido->nombre ?? 'Alianza' }}</td>
                     <td style="text-align: right; font-family: monospace;">{{ number_format($candidato->total_votos) }}</td>
                     <td style="text-align: right; font-weight: bold;">
-                        {{ $granTotalVotos > 0 ? number_format(($candidato->total_votos / $granTotalVotos) * 100, 2) : '0.00' }}%
+                        {{ $totalSufragantes > 0 ? number_format(($candidato->total_votos / $totalSufragantes) * 100, 2) : '0.00' }}%
                     </td>
                 </tr>
             @endforeach
         </tbody>
     </table>
 
+    <!-- BLOQUE 1: Desglose físico de papeletas encontradas dentro de la urna -->
     <table class="resumen-votos">
         <tr>
-            <td>Votos Válidos: {{ number_format($granTotalVotos - $totalVotosBlancos - $totalVotosNulos) }}</td>
-            <td>Blancos: {{ number_format($totalVotosBlancos) }}</td>
-            <td>Nulos: {{ number_format($totalVotosNulos) }}</td>
-            <td style="background-color: #1e3a8a; color: white;">TOTAL: {{ number_format($granTotalVotos) }}</td>
+            <td style="width: 25%;">Votos Válidos: {{ number_format($totalVotosValidos) }}</td>
+            <td style="width: 25%;">Blancos: {{ number_format($totalVotosBlancos) }}</td>
+            <td style="width: 25%;">Nulos: {{ number_format($totalVotosNulos) }}</td>
+            <td style="background-color: #e2e8f0; color: #1e3a8a; width: 25%;">SUFRAGANTES: {{ number_format($totalSufragantes) }}</td>
+        </tr>
+    </table>
+
+    <!-- BLOQUE 2: Cuadrante de control general (Ausentismo frente al Padrón Total Esperado) -->
+    <table class="resumen-votos" style="margin-top: 5px;">
+        <tr>
+            <td style="width: 50%; color: #b91c1c; background-color: #fef2f2;">
+                Ausentismo: {{ number_format($ausentismo) }} ({{ $porcentajeAusentismo }}%)
+            </td>
+            <td style="background-color: #1e3a8a; color: white; width: 50%; font-size: 13px;">
+                TOTAL PADRÓN ELECTORAL: {{ number_format($totalPadron) }}
+            </td>
         </tr>
     </table>
 

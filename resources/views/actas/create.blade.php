@@ -12,7 +12,7 @@
     <form id="form-acta" method="POST" action="{{ route('actas.store') }}" class="w-full max-w-md mx-auto p-4 space-y-6 bg-white shadow rounded-lg">
         @csrf
         <input type="hidden" id="dignidad" name="dignidad" value="{{ $user->dignidad_asignada ?? '' }}">
-        
+        <input type="hidden" id="ausentismo" name="ausentismo" value="0">
         <div class="space-y-4">
             <h2 class="text-lg font-bold text-gray-800 border-b pb-2">1. Ubicación Electoral</h2>
             
@@ -241,6 +241,7 @@
                 else if (totalVotosActa < limiteElectores) {
                     const ausentismo = limiteElectores - totalVotosActa;
                     actualizarSemaforo(`✓ Mesa Cuadrada con Ausentismo (${ausentismo} electores ausentes).`, 'green');
+                    document.getElementById('ausentismo').value = ausentismo;
                     bloquearGuardado(false);
                 } 
                 else {

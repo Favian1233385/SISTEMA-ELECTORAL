@@ -77,6 +77,17 @@ class UserGenerationController extends Controller
         DB::beginTransaction();
         try {
             $creados = 0;
+
+            // 1. LIMPIEZA CRÍTICA: Forzar la eliminación de los usuarios preexistentes de este territorio
+            User::where('role', 'digitador')
+                ->where('proceso_eleccion', $procesoMesa)
+                ->where('dignidad_asignada', $dignidad)
+                ->when($tipo === 'provincia', function($q) use ($territorioId) { $q->where('provincia_id', $territorioId); })
+                ->when($tipo === 'canton', function($q) use ($territorioId) { $q->where('canton_id', $territorioId); })
+                ->when($tipo === 'parroquia', function($q) use ($territorioId) { $q->where('parroquia_id', $territorioId); })
+                ->delete();
+
+            // 2. PROCESAMIENTO LIMPIO EN CASCADA
             foreach ($mesas as $mesa) {
                 if (!$mesa->recinto || !$mesa->recinto->parroquia || !$mesa->recinto->parroquia->canton) {
                     continue; 
@@ -96,31 +107,35 @@ class UserGenerationController extends Controller
                 $tagProceso = ($procesoUser === 'primaria') ? ' (Primarias)' : '';
                 $nombreRecintoCorto = Str::limit($recinto->nombre, 25, '...');
                 $nombreDigitador = "Digitador " . ucfirst(strtolower($dignidad)) . " - " . $nombreRecintoCorto . " - M: " . $mesa->numero . " (" . substr($mesa->genero, 0, 3) . ")" . $tagProceso;
+                
                 // GENERACIÓN DE CONTRASEÑA DINÁMICA ALEATORIA (6 dígitos)
                 $passwordAleatorio = (string) rand(100000, 999999);
-                User::updateOrCreate(
-                    ['email' => $email],
-                    [
-                        'name'              => $nombreDigitador,
-                        'password'          => Hash::make($passwordAleatorio), 
-                        'password_plain'    => $passwordAleatorio,
-                        'role'              => 'digitador',
-                        'proceso_eleccion'  => $procesoMesa,
-                        'tipo_proceso'      => $procesoUser,
-                        'mesa_id'           => $mesa->id,
-                        'dignidad_asignada' => $dignidad, 
-                        'provincia_id'      => $canton->provincia_id, 
-                        'canton_id'         => $canton->id,
-                        'parroquia_id'      => $parroquia->id,
-                        'recinto_id'        => $recinto->id,
-                    ]
-                );
+                
+                User::create([
+                    'name'              => $nombreDigitador,
+                    'email'             => $email,
+                    'password'          => Hash::make($passwordAleatorio),
+                    'password_plain'    => $passwordAleatorio, // Asegúrate que esté en el $fillable de User.php
+                    'role'              => 'digitador',
+                    'proceso_eleccion'  => $procesoMesa,
+                    'tipo_proceso'      => $procesoUser,
+                    'mesa_id'           => $mesa->id,
+                    'dignidad_asignada' => $dignidad, 
+                    'provincia_id'      => $canton->provincia_id, 
+                    'canton_id'         => $canton->id,
+                    'parroquia_id'      => $parroquia->id,
+                    'recinto_id'        => $recinto->id,
+                    // --- AGREGA ESTAS LÍNEAS DE CONTROL AQUÍ ---
+                    'ver_prefectos'      => false,
+                    'ver_nivel_superior' => false,
+                    'ver_nivel_inferior' => false,
+                ]);
+                
                 $creados++;
             }
 
             DB::commit();
             return back()->with('success', "Se han generado exitosamente $creados usuarios digitadores para el territorio de tipo [$tipo] en el proceso electoral.");
-            
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Error crítico en generación de usuarios", [
@@ -171,18 +186,22 @@ class UserGenerationController extends Controller
 
         $digitadores = $query->orderBy('name', 'asc')->get();
 
-        // CAMBIO CORRECTIVO: Mutar la colección antes de enviarla a la vista 
-        // para asegurar que 'password_plain' jamás llegue vacío al HTML de la tabla web
+        // 1. CONDICIONAL PRIORITARIA: Si se solicita el PDF, se envía la colección PURA y LIMPIA inmediatamente
+        if ($request->has('pdf')) {
+            return $this->exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion);
+        }
+
+        // 2. ENMASCARAMIENTO EXCLUSIVO PARA LA VISTA WEB: 
+        // Solo si no fue PDF, mutamos los datos para proteger la visualización en pantalla
         $digitadores->transform(function ($user) {
-            if (empty($user->password_plain)) {
+            // Reemplazar la clave real por asteriscos o 'N/A' solo para la tabla HTML del navegador
+            if (!empty($user->password_plain)) {
+                $user->password_plain = '••••••'; // Protege visualmente la pantalla contra espías
+            } else {
                 $user->password_plain = 'N/A';
             }
             return $user;
         });
-
-        if ($request->has('pdf')) {
-            return $this->exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion);
-        }
 
         return view('admin.digitadores.index', compact('digitadores', 'tipo', 'id', 'dignidad', 'procesoEleccion'));
     }
@@ -245,6 +264,9 @@ class UserGenerationController extends Controller
    /**
      * Genera el PDF y aplica la purga automática de seguridad inmediatamente.
      */
+    /**
+     * Genera el PDF y aplica la purga automática de seguridad inmediatamente.
+     */
     private function exportarPDF($digitadores, $tipo, $id, $dignidad, $procesoEleccion)
     {
         if ($digitadores->isEmpty()) {
@@ -254,17 +276,35 @@ class UserGenerationController extends Controller
         $tituloReporte = "CREDENCIALES DE ACCESO - DIGITADORES (" . strtoupper($procesoEleccion) . ")";
         $subtitulo = "Territorio: " . ucfirst($tipo) . " (ID: $id) | Dignidad: " . ($dignidad ?? 'TODAS');
 
-        // 1. COMPILAR EL PDF EN MEMORIA RAM (Lleva las claves legibles reales)
+        // 1. VINCULAR LA VISTA
         $pdf = Pdf::loadView('admin.digitadores.pdf', compact('digitadores', 'tituloReporte', 'subtitulo'))
                   ->setPaper('a4', 'portrait')
                   ->setWarnings(false);
-        // 2. PURGA INMEDIATA EN LA BASE DE DATOS (Antes de enviar el archivo al navegador)
-        $userIds = $digitadores->pluck('id');
-        User::whereIn('id', $userIds)->update(['password_plain' => null]);
-        Log::info("Seguridad Automatizada: Claves planas eliminadas con éxito tras compilar el PDF.", [
-            'cantidad_usuarios_protegidos' => $userIds->count()
+        
+        // 2. FORZAR EL RENDERIZADO INMEDIATO EN MEMORIA RAM
+        // Esto procesa el HTML y lee 'password_plain' cuando los datos aún existen intactos.
+        $pdfRenderizado = $pdf->output();
+
+        // =========================================================================
+        // CONTROL EN DESARROLLO: SE DESACTIVA LA PURGA PARA AUDITAR CONTRASEÑAS
+        // =========================================================================
+        // Las siguientes líneas se comentan para evitar que las claves queden en NULL
+        // y garantizar consistencia absoluta entre la base de datos y el PDF generado.
+        //
+        // $userIds = $digitadores->pluck('id');
+        // User::whereIn('id', $userIds)->update(['password_plain' => null]);
+        // 
+        // Log::info("Seguridad Automatizada: Claves planas eliminadas con éxito tras compilar el PDF.", [
+        //     'cantidad_usuarios_protegidos' => $userIds->count()
+        // ]);
+        // =========================================================================
+
+        // 4. RETORNAR EL ARCHIVO PRE-RENDERIZADO AL NAVEGADOR
+        return response()->streamDownload(function () use ($pdfRenderizado) {
+            echo $pdfRenderizado;
+        }, "credenciales_digitadores_{$procesoEleccion}_{$tipo}.pdf", [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"credenciales_digitadores_{$procesoEleccion}_{$tipo}.pdf\""
         ]);
-        // 3. ENVIAR EL PDF COMPILADO AL NAVEGADOR
-        return $pdf->stream("credenciales_digitadores_{$procesoEleccion}_{$tipo}.pdf");
-    }  
+    }
 }

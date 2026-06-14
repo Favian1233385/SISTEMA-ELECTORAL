@@ -294,9 +294,17 @@
                     <p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider">Votos Blancos</p>
                     <p class="text-3xl font-black text-gray-800 dark:text-white tracking-tight mt-1">{{ number_format($totalVotosBlancos) }}</p>
                 </div>
+                
                 <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between min-h-[110px]">
                     <p class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider">Votos Nulos</p>
                     <p class="text-3xl font-black text-gray-800 dark:text-white tracking-tight mt-1">{{ number_format($totalVotosNulos) }}</p>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow border-l-4 border-red-500">
+                    <span class="text-sm text-gray-500 font-bold uppercase block mb-2">Ausentismo</span>
+                    <span class="text-2xl font-bold text-gray-800">
+                        {{ isset($totalAusentismo) ? number_format($totalAusentismo) : 0 }}
+                    </span>
                 </div>
             </div>
 

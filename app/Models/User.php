@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+
 use App\Models\Provincia;
 use App\Models\Canton;
 use App\Models\Parroquia;
@@ -11,10 +12,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Facades\Hash; // <-- Esencial para la encriptación
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected $table = 'users'; // Forzamos explícitamente el nombre de la tabla
 
     protected $fillable = [
         'name',
@@ -24,12 +28,14 @@ class User extends Authenticatable
         'role',              
         'proceso_eleccion',     
         'dignidad_asignada', 
-        'provincia_id',
-        'canton_id',
-        'parroquia_id',
-        'recinto_id',    
-        'mesa_id',       
+        'provincia_id',    // <-- Sincronizado con tu BD real
+        'canton_id',       // <-- Sincronizado con tu BD real
+        'parroquia_id',    // <-- Sincronizado con tu BD real
+        'recinto_id',      // <-- Sincronizado con tu BD real
+        'mesa_id',         // <-- Sincronizado con tu BD real
         'ver_prefectos', 
+        'ver_nivel_superior', // <-- Agregado (tinyint en tu BD)
+        'ver_nivel_inferior', // <-- Agregado (tinyint en tu BD)
     ];
 
     protected $hidden = [
@@ -40,10 +46,24 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'ver_prefectos' => 'boolean',
+        'ver_nivel_superior' => 'boolean', // Mapeado como booleano para Laravel
+        'ver_nivel_inferior' => 'boolean', // Mapeado como booleano para Laravel
         'password_plain' => 'string',
     ];
 
-    // --- MÉTODOS DE LÓGICA DE ROLES CORREGIDOS ---
+    /**
+     * MUTADOR AUTOMÁTICO DE CONTRASEÑA
+     * Encripta el texto plano del PDF de manera transparente antes de guardarlo.
+     */
+    public function setPasswordAttribute($value)
+    {
+        if (!empty($value)) {
+            // Si ya viene encriptado (por ejemplo, empieza con $2y$), lo guarda directo. Si no, genera el hash.
+            $this->attributes['password'] = str_starts_with($value, '$2y$') ? $value : Hash::make($value);
+        }
+    }
+
+    // --- MÉTODOS DE LÓGICA DE ROLES ---
 
     public function esAdmin()
     {
@@ -52,7 +72,6 @@ class User extends Authenticatable
 
     public function esAdminGeneral()
     {
-        // El SuperAdmin es admin y punto, no importa su ubicación
         return $this->role === 'admin';
     }
 
@@ -80,17 +99,15 @@ class User extends Authenticatable
 
     public function puedeDigitar($dignidad)
     {
-        // Un admin general puede todo, un digitador solo su dignidad asignada
         if ($this->esAdminGeneral()) return true;
         return $this->dignidad_asignada === $dignidad;
     }
 
     /**
-     * Retorna el nombre del lugar que administra para mostrar en el perfil
+     * Retorna el nombre del lugar que administra para mostrar en el perfil electoral
      */
     public function ubicacionAsignada()
     {
-        // Usamos el operador nullsafe (?->) para evitar errores si la relación es nula
         if ($this->mesa_id) return "Mesa #" . ($this->mesa?->numero ?? 'S/N');
         if ($this->recinto_id) return $this->recinto?->nombre ?? 'Recinto';
         if ($this->parroquia_id) return $this->parroquia?->nombre ?? 'Parroquia';
@@ -99,10 +116,10 @@ class User extends Authenticatable
         return 'Acceso Total';
     }
 
-    // --- RELACIONES TERRITORIALES ---
-    public function provincia() { return $this->belongsTo(Provincia::class); }
-    public function canton() { return $this->belongsTo(Canton::class); }
-    public function parroquia() { return $this->belongsTo(Parroquia::class); }
-    public function recinto() { return $this->belongsTo(Recinto::class); }
-    public function mesa() { return $this->belongsTo(Mesa::class); }
+    // --- RELACIONES TERRITORIALES CORREGIDAS ---
+    public function provincia() { return $this->belongsTo(Provincia::class, 'provincia_id'); }
+    public function canton() { return $this->belongsTo(Canton::class, 'canton_id'); }
+    public function parroquia() { return $this->belongsTo(Parroquia::class, 'parroquia_id'); }
+    public function recinto() { return $this->belongsTo(Recinto::class, 'recinto_id'); }
+    public function mesa() { return $this->belongsTo(Mesa::class, 'mesa_id'); }
 }

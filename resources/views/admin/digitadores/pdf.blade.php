@@ -157,7 +157,7 @@
 
                                 <div class="credenciales-box">
                                     <div style="margin-bottom: 2px;"><strong>Usuario:</strong> <code>{{ $user->email }}</code></div>
-                                    <div><strong>Contraseña:</strong> <code>{{ $user->password_plain ?? 'voto2026' }}</code></div>
+                                   <div><strong>Contraseña:</strong> <code>{{ $user->password_plain }}</code></div>
                                 </div>
                             </div>
                         </td>

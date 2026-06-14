@@ -243,7 +243,7 @@ class ActaController extends Controller
     {
         $user = auth()->user();
 
-        // 1. Flexibilidad de validación según el rol del usuario
+        // 1. FLEXIBILIDAD DE VALIDACIÓN SEGÚN EL ROL DEL USUARIO (Sincronizado con la Vista)
         $isDigitadorConMesa = $user->esDigitador() && $user->mesa_id;
 
         $request->validate([
@@ -251,16 +251,17 @@ class ActaController extends Controller
             'dignidad'         => $isDigitadorConMesa ? 'nullable' : 'required',
             'votos_blancos'    => 'required|integer|min:0',
             'votos_nulos'      => 'required|integer|min:0',
+            'ausentismo'       => 'required|integer|min:0', // CORREGIDO: Se añade al motor de validación
             'votos_candidatos' => 'required|array'
         ]);
 
-        // 2. Obtener el proceso electoral activo
+        // 2. OBTENER EL PROCESO ELECTORAL ACTIVO
         $procesoActivo = \App\Models\ProcesoElectoral::where('estado', 'activo')->first();
         if (!$procesoActivo) {
             return back()->withErrors(['error' => 'No existe un proceso electoral activo en el sistema.']);
         }
 
-        // 3. Resolver ID de la mesa
+        // 3. RESOLVER ID DE LA MESA
         $mesa_id_final = $isDigitadorConMesa ? $user->mesa_id : $request->mesa_id;
         $mesa = Mesa::find($mesa_id_final);
         
@@ -268,49 +269,53 @@ class ActaController extends Controller
             return back()->withErrors(['error' => 'La mesa seleccionada no es válida o no existe.']);
         }
 
-        // 4. Resolver Dignidad
+        // 4. RESOLVER DIGNIDAD
         $dignidad_final = $user->esDigitador() ? $user->dignidad_asignada : $request->dignidad;
 
-        // 5. BLINDAJE DE SEGURIDAD EN BACKEND: Evitar duplicación enviando a la vista index con mensaje de error
+        // 5. BLINDAJE DE SEGURIDAD EN BACKEND: Evitar duplicación
         if (Acta::where('mesa_id', $mesa_id_final)->where('dignidad', $dignidad_final)->exists()) {
-            return redirect()->route('dashboard')->with('error', 'Acceso denegado: Su acta asignada ya fue guardada con éxito en el sistema. El panel de digitación se encuentra bloqueado de forma definitiva.');
+            return redirect()->route('dashboard')->with('error', 'Acceso denegado: Su acta asignada ya fue guardada con éxito en el sistema.');
         }
 
-        // 6. Semáforo de validación amoldado a las opciones estrictas de tu ENUM
+        // 6. CONTROL DE CONSISTENCIA Y CONFIGURACIÓN DEL ESTADO DEL ACTA
         $suma_votos_candidatos = array_sum($request->votos_candidatos);
         $total_votos_acta = $suma_votos_candidatos + $request->votos_blancos + $request->votos_nulos;
-        $limite_electores = $mesa->num_electores;
+        $limite_electores = (int) $mesa->num_electores;
 
-        // Ajuste directo basado en: enum('ingresada','verificada','con_novedad')
+        // CORREGIDO: Respetamos el ausentismo calculado y enviado legítimamente desde el formulario
         if ($total_votos_acta <= $limite_electores) {
-            $estado_acta = 'ingresada'; // Cuadradas normales o con ausentismo entran limpias
+            $estado_acta = 'ingresada'; 
+            $ausentismo_final = (int) $request->ausentismo; 
         } else {
-            $estado_acta = 'con_novedad'; // Supera el padrón (Inconsistente)
+            $estado_acta = 'con_novedad'; // Si hay exceso de votos, entra con novedad de forma estricta
+            $ausentismo_final = 0; 
         }
 
-        // 7. Persistencia atómica mediante Transacción SQL
+        // 7. PERSISTENCIA ATÓMICA MEDIANTE TRANSACCIÓN SQL
         try {
-            DB::transaction(function () use ($request, $user, $mesa_id_final, $dignidad_final, $estado_acta, $procesoActivo) {
+            // Pasamos la variable $ausentismo_final usando 'use' en la clausura
+            DB::transaction(function () use ($request, $user, $mesa_id_final, $dignidad_final, $estado_acta, $ausentismo_final, $procesoActivo) {
                 
-                // Inserción mapeada uno a uno con los campos obligatorios (NO NULL) de tu esquema
+                // Inserción de la cabecera del Acta con correspondencia exacta
                 $acta = Acta::create([
                     'proceso_electoral_id' => $procesoActivo->id,
                     'mesa_id'              => $mesa_id_final,
                     'user_id'              => $user->id,
                     'dignidad'             => $dignidad_final,
-                    'tipo_proceso'         => $procesoActivo->tipo ?? 'generales', // Toma el valor dinámico o hereda el default de la BD
+                    'tipo_proceso'         => $procesoActivo->tipo ?? 'generales',
                     'votos_blancos'        => $request->votos_blancos,
                     'votos_nulos'          => $request->votos_nulos,
+                    'ausentismo'           => $ausentismo_final, // Almacena el valor definitivo sin riesgo de descalce
                     'estado'               => $estado_acta,
-                    'foto_path'            => null // Queda preparado si manejas subida de imágenes en el futuro
+                    'foto_path'            => null 
                 ]);
 
-                // Sincronización de votos en la tabla asociativa 'acta_candidato'
+                // 8. SINCRONIZACIÓN SANEADA DE LOS VOTOS POR CANDIDATO
                 $votosData = [];
                 foreach ($request->votos_candidatos as $candidatoId => $votos) {
                     if ($votos !== null && $votos !== '') {
                         $votosData[$candidatoId] = [
-                            'votos' => (int) $votos
+                            'votos' => (int) $votos // Asegúrate de que tu tabla intermedia use la columna 'votos'
                         ];
                     }
                 }
@@ -320,14 +325,14 @@ class ActaController extends Controller
                 }
             });
 
-            // Forzar limpieza de caché para actualizar reportes
+            // Limpieza inmediata de la caché para actualizar los dashboards en tiempo real
             \Illuminate\Support\Facades\Artisan::call('cache:clear');
 
             return redirect()->route('actas.index')->with('success', "Acta guardada exitosamente en el sistema.");
 
         } catch (\Exception $e) {
             Log::error('Fallo estructural en guardado de acta: ' . $e->getMessage());
-            return back()->withInput()->withErrors(['error' => 'Error de consistencia SQL: ' . $e->getMessage()]);
+            return back()->withInput()->withErrors(['error' => 'Error de consistencia SQL al procesar los registros: ' . $e->getMessage()]);
         }
     }
 }
