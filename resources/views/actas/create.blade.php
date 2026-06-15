@@ -13,13 +13,14 @@
         @csrf
         <input type="hidden" id="dignidad" name="dignidad" value="{{ $user->dignidad_asignada ?? '' }}">
         <input type="hidden" id="ausentismo" name="ausentismo" value="0">
+        
         <div class="space-y-4">
             <h2 class="text-lg font-bold text-gray-800 border-b pb-2">1. Ubicación Electoral</h2>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
                 <select id="provincia_id" name="provincia_id" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-base">
-                    </select>
+                </select>
             </div>
 
             <div>
@@ -66,16 +67,14 @@
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Votos en Blanco</label>
-                <input type="number" id="votos_blancos" name="votos_blancos" min="0" inputmode="numeric" pattern="[0-9]*"
-                    class="w-full p-3 text-center border border-gray-300 rounded-md text-xl focus:ring-2 focus:ring-blue-500" 
-                    value="0">
+                <input type="number" id="votos_blancos" name="votos_blancos" min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*"
+                    class="w-full p-3 text-center border border-gray-300 rounded-md text-xl focus:ring-2 focus:ring-blue-500">
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Votos Nulos</label>
-                <input type="number" id="votos_nulos" name="votos_nulos" min="0" inputmode="numeric" pattern="[0-9]*"
-                    class="w-full p-3 text-center border border-gray-300 rounded-md text-xl focus:ring-2 focus:ring-blue-500" 
-                    value="0">
+                <input type="number" id="votos_nulos" name="votos_nulos" min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*"
+                    class="w-full p-3 text-center border border-gray-300 rounded-md text-xl focus:ring-2 focus:ring-blue-500">
             </div>
         </div>
 
@@ -90,11 +89,11 @@
 
         <div class="pt-4 pb-2 space-y-4">
             <div id="semaforo-validacion" class="w-full p-3 text-center font-bold rounded-md bg-yellow-100 text-yellow-800 text-sm border border-yellow-300">
-                Faltan votos por ingresar para cuadrar la mesa.
+                Seleccione una mesa para iniciar el control.
             </div>
 
-            <button type="submit" id="btn-guardar-acta" 
-                    class="w-full p-4 bg-gray-400 text-black font-bold text-lg rounded-md shadow uppercase tracking-wide cursor-not-allowed transition-colors">
+            <button type="submit" id="btn-guardar-acta" disabled
+                class="w-full p-4 bg-gray-400 text-gray-700 font-bold text-lg rounded-md shadow uppercase tracking-wide cursor-not-allowed transition-colors">
                 Guardar Acta Oficial
             </button>
         </div>
@@ -118,6 +117,7 @@
             
             const contenedorCandidatos = document.getElementById('contenedor-candidatos');
             const semaforo             = document.getElementById('semaforo-validacion');
+            const btnGuardar           = document.getElementById('btn-guardar-acta');
 
             // 3. FLUJO POR ROL
             if (j.esDigitador) {
@@ -219,7 +219,7 @@
                 const limiteElectores = parseInt(inputSufragantes.value) || 0;
                 if (limiteElectores === 0) {
                     actualizarSemaforo('Seleccione una mesa para iniciar el control.', 'yellow');
-                    bloquearGuardado(true);
+                    establecerEstadoBoton('inicial');
                     return;
                 }
 
@@ -236,18 +236,18 @@
 
                 if (totalVotosActa === limiteElectores) {
                     actualizarSemaforo('✓ Mesa Cuadrada. Todos los electores han sufragado.', 'green');
-                    bloquearGuardado(false);
+                    establecerEstadoBoton('valido');
                 } 
                 else if (totalVotosActa < limiteElectores) {
                     const ausentismo = limiteElectores - totalVotosActa;
                     actualizarSemaforo(`✓ Mesa Cuadrada con Ausentismo (${ausentismo} electores ausentes).`, 'green');
                     document.getElementById('ausentismo').value = ausentismo;
-                    bloquearGuardado(false);
+                    establecerEstadoBoton('valido');
                 } 
                 else {
                     const exceso = totalVotosActa - limiteElectores;
                     actualizarSemaforo(`⚠ Inconsistencia: Exceso de votos. Hay ${exceso} votos por encima del padrón.`, 'red');
-                    bloquearGuardado(true);
+                    establecerEstadoBoton('inconsistente');
                 }
             }
 
@@ -309,9 +309,8 @@
                                 <span class="text-xs text-gray-500 font-semibold uppercase tracking-wider">${partidoNombre}</span>
                             </div>
                         </div>
-                        <input type="number" name="votos_candidatos[${cand.id}]" min="0" inputmode="numeric" pattern="[0-9]*"
-                            class="input-voto-candidato w-full p-3 text-center border border-gray-300 rounded-md text-xl font-bold bg-blue-50 text-blue-900 focus:ring-2 focus:ring-blue-500 transition-all" 
-                            value="0">
+                        <input type="number" name="votos_candidatos[${cand.id}]" min="0" placeholder="0" inputmode="numeric" pattern="[0-9]*"
+                            class="input-voto-candidato w-full p-3 text-center border border-gray-300 rounded-md text-xl font-bold bg-blue-50 text-blue-900 focus:ring-2 focus:ring-blue-500 transition-all">
                     `;
                     contenedorCandidatos.appendChild(card);
                 });
@@ -365,25 +364,36 @@
                 semaforo.innerText = mensaje;
             }
 
-            function bloquearGuardado(status) {
-                const btnGuardar = document.getElementById('btn-guardar-acta');
+            // Centralización semántica del control del botón
+            function establecerEstadoBoton(estado) {
                 if (!btnGuardar) return;
 
-                if (status) {
-                    btnGuardar.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white');
-                    btnGuardar.classList.add('bg-red-600', 'hover:bg-red-700', 'text-black');
-                    btnGuardar.innerText = "Guardar Acta (Con Inconsistencias)";
-                } else {
-                    btnGuardar.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-gray-400', 'cursor-not-allowed');
-                    btnGuardar.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-black');
+                // Remover todas las variantes previas de estilo
+                btnGuardar.classList.remove(
+                    'bg-gray-400', 'text-gray-700', 'cursor-not-allowed',
+                    'bg-emerald-600', 'hover:bg-emerald-700', 'text-white',
+                    'bg-red-600', 'hover:bg-red-700'
+                );
+
+                if (estado === 'inicial') {
+                    btnGuardar.disabled = true;
+                    btnGuardar.classList.add('bg-gray-400', 'text-gray-700', 'cursor-not-allowed');
                     btnGuardar.innerText = "Guardar Acta Oficial";
+                } 
+                else if (estado === 'valido') {
+                    btnGuardar.disabled = false;
+                    btnGuardar.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white');
+                    btnGuardar.innerText = "Guardar Acta Oficial";
+                } 
+                else if (estado === 'inconsistente') {
+                    btnGuardar.disabled = false; // Permitir guardar con inconsistencia bajo advertencia visual
+                    btnGuardar.classList.add('bg-red-600', 'hover:bg-red-700', 'text-white');
+                    btnGuardar.innerText = "Guardar Acta (Con Inconsistencias)";
                 }
             }
 
-            // CORREGIDO: Interceptor de submit completamente cerrado y saneado
+            // Interceptor de submit
             document.getElementById('form-acta').addEventListener('submit', function(e) {
-                console.log("Formulario enviado. Recopilando datos de candidatos...");
-                
                 const inputs = document.querySelectorAll('.input-voto-candidato');
                 if (inputs.length === 0) {
                     alert("ERROR FRONTEND: No hay candidatos renderizados en el formulario. El envío se canceló.");
@@ -397,7 +407,7 @@
                 });
                 
                 if(!datosCargados) {
-                    const confirmar = confirm("AVISO: Todos los campos de candidatos están en cero. ¿Desea continuar con el registro?");
+                    const confirmar = confirm("AVISO: Todos los campos de candidatos están en cero o vacíos. ¿Desea continuar con el registro?");
                     if (!confirmar) {
                         e.preventDefault();
                     }
