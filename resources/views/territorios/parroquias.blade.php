@@ -72,7 +72,11 @@
                                         <option value="CONCEJALES">CONCEJALES</option>
                                         <option value="PREFECTO">PREFECTO</option>
                                     </select>
-
+                                    {{-- BOTÓN 1: GENERAR DIGITADORES (Agregado con estilos idénticos a la vista matriz) --}}
+                                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold py-2 rounded-lg transition shadow-sm uppercase tracking-tighter flex items-center justify-center mb-2 cursor-pointer">
+                                        ⚙️ Generar Digitadores
+                                    </button>
+                                </form>
                                     {{-- BOTÓN 2 MODIFICADO (Pasa el ID limpio y directo sin buscar contenedores) --}}
                                     <button type="button"
                                             onclick="irAVerDigitadoresParroquiaDirecto({{ $parroquia->id }})"

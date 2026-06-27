@@ -187,7 +187,14 @@
             function ejecutarCargaCandidatos(provId, cantId, parrId) {
                 contenedorCandidatos.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Cargando candidatos asignados...</p>';
                 
-                const urlCandidatos = `{{ route('candidatos.filtrados') }}?provincia_id=${provId}&canton_id=${cantId}&parroquia_id=${parrId}`;
+                // Obtener dignidad del input oculto
+                const dignidadActual = document.getElementById('dignidad').value;
+                
+                // Obtener el proceso electoral desde el objeto jurisdicción (inyectado desde el controlador)
+                const procesoElectoralId = j.proceso_electoral_id || ''; 
+
+                // Construimos la URL incluyendo estrictamente el proceso electoral
+                const urlCandidatos = `{{ route('candidatos.filtrados') }}?dignidad=${encodeURIComponent(dignidadActual)}&proceso_electoral_id=${procesoElectoralId}&provincia_id=${provId}&canton_id=${cantId}&parroquia_id=${parrId}`;
                 
                 fetch(urlCandidatos)
                     .then(res => {

@@ -69,7 +69,9 @@ class ActaController extends Controller
             'parroquia_id'      => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto->parroquia_id : $user->parroquia_id,
             'recinto_id'        => ($user->esDigitador() && $mesaAsignada) ? $mesaAsignada->recinto_id : null,
             'mesa_id'           => $user->mesa_id, 
-            'dignidad_asignada' => $user->dignidad_asignada 
+            'dignidad_asignada' => $user->dignidad_asignada, 
+            'proceso_electoral_id' => $user->proceso_electoral_id,
+
         ];
 
         return view('actas.create', compact('provincias', 'user', 'jurisdiccion', 'mesaAsignada'));
@@ -170,65 +172,80 @@ class ActaController extends Controller
 
             $query = Candidato::with(['partido']);
 
-            // 2. VERIFICACIÓN DEL PROCESO ELECTORAL ACTIVO
+            // 2. VERIFICACIÓN DEL PROCESO ELECTORAL ACTIVO (Mantiene tu aislamiento de producción)
             $procesoActivo = \App\Models\ProcesoElectoral::where('estado', 'activo')->first();
 
             if (!$procesoActivo) {
-                // Escribir la alerta en el log para el desarrollador
                 Log::error('ERROR CRÍTICO: No se encontró ningún Proceso Electoral con estado = "activo" en la base de datos.');
                 return response()->json(['error' => 'No hay proceso electoral activo.'], 500);
             }
 
             $query->where('proceso_electoral_id', $procesoActivo->id); 
 
-            // 3. CONDICIONALES GEOGRÁFICAS SEGÚN ÁMBITO
+            // 3. CONDICIONALES ESTRICTAS: GEOGRAFÍA + DIGNIDAD (Aquí se resuelve la mezcla)
             if (str_contains($dignidad, 'prefecto')) { 
-                if (!$provincia_id) {
+                if (!$provincia_id || $provincia_id === 'null' || $provincia_id === 'undefined') {
                     Log::warning('Falta provincia_id para dignidad provincial (Prefecto)');
                     return response()->json([]);
                 }
-                $query->where('provincia_id', '=', $provincia_id);
+                // Filtramos la ubicación y obligamos a que la dignidad de la tabla sea 'Prefecto'
+                $query->where('provincia_id', '=', $provincia_id)
+                    ->where('dignidad', '=', 'Prefecto');
             } 
-            elseif (str_contains($dignidad, 'alcalde') || str_contains($dignidad, 'concejal')) {
-                if (!$canton_id) {
-                    Log::warning('Falta canton_id para dignidad cantonal');
+            
+            elseif (str_contains($dignidad, 'alcalde')) {
+                if (!$canton_id || $canton_id === 'null' || $canton_id === 'undefined') {
+                    Log::warning('Falta canton_id para dignidad cantonal (Alcalde)');
                     return response()->json([]);
                 }
-                $query->where('canton_id', '=', $canton_id);
-            } 
+                // Filtramos la ubicación y obligamos a que la dignidad de la tabla sea 'Alcalde'
+                $query->where('canton_id', '=', $canton_id)
+                    ->where('dignidad', '=', 'Alcalde');
+            }
+            
+            elseif (str_contains($dignidad, 'concejal')) {
+                if (!$canton_id || $canton_id === 'null' || $canton_id === 'undefined') {
+                    Log::warning('Falta canton_id para dignidad cantonal (Concejal)');
+                    return response()->json([]);
+                }
+                // Mapeo flexible usando LIKE por si manejas subcategorías en el enum (Urbano/Rural)
+                $query->where('canton_id', '=', $canton_id)
+                    ->where('dignidad', 'LIKE', 'Concejal%');
+            }
+            
             elseif (str_contains($dignidad, 'junta')) {
-                if (!$parroquia_id) {
-                    Log::warning('Falta parroquia_id para dignidad parroquial');
+                if (!$parroquia_id || $parroquia_id === 'null' || $parroquia_id === 'undefined') {
+                    Log::warning('Falta parroquia_id para dignidad parroquial (Junta)');
                     return response()->json([]);
                 }
-                $query->where('parroquia_id', '=', $parroquia_id);
-            } else {
+                $query->where('parroquia_id', '=', $parroquia_id)
+                    ->where('dignidad', 'LIKE', '%Junta%');
+            } 
+            
+            else {
                 Log::warning('La dignidad no coincide con ningún ámbito geográfico conocido: ' . $dignidadRaw);
                 return response()->json([]);
             }
             
-            // 4. ORDENAMIENTO NORMALIZADO (PRIMARIAS VS GENERALES)
+            // 4. ORDENAMIENTO NORMALIZADO ORIGINAL (PRIMARIAS VS GENERALES)
             if ($procesoActivo->tipo === 'primarias') {
-                // Orden alfabético por el nombre de la lista/partido utilizando una subconsulta limpia
                 $query->orderBy(function($q) {
                     $q->select('nombre')
-                      ->from('partidos')
-                      ->whereColumn('partidos.id', 'candidatos.partido_id');
+                    ->from('partidos')
+                    ->whereColumn('partidos.id', 'candidatos.partido_id');
                 }, 'asc');
             } else {
-                // Orden numérico real convirtiendo el campo texto a entero para las generales
                 $query->orderByRaw('(SELECT CAST(numero AS UNSIGNED) FROM partidos WHERE partidos.id = candidatos.partido_id) ASC');
             }
 
             $candidatos = $query->get();
 
-            // LOG DE ÉXITO: Guardamos cuántos registros encontró la consulta SQL
+            // LOG DE ÉXITO
             Log::info('Consulta ejecutada con éxito', ['cantidad_candidatos' => $candidatos->count()]);
 
             return response()->json($candidatos);
 
         } catch (\Exception $e) {
-            // CAPTURA DE ERRORES DE SINTAXIS, CONEXIÓN O CAMPOS INEXISTENTES
             Log::error('ERROR GRAVE EN getCandidatosFiltrados: ' . $e->getMessage(), [
                 'archivo' => $e->getFile(),
                 'linea' => $e->getLine(),
@@ -238,7 +255,6 @@ class ActaController extends Controller
             return response()->json(['error' => 'Excepción interna del servidor.'], 500);
         }
     }
-
     public function store(Request $request)
     {
         $user = auth()->user();

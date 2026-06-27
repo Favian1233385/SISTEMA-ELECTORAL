@@ -1,5 +1,5 @@
 <x-app-layout>
-    <x-slot name="header">
+        <x-slot name="header">
         <div class="flex flex-col md:flex-row justify-between items-center gap-4">
             <!-- Título del Módulo e Indicador EN VIVO -->
             <div class="flex items-center">
@@ -358,38 +358,35 @@
             </div>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // 1. Inyección de datos crudos desde Laravel
-        const candidatosCard = {!! json_encode($candidatosOrdenados->map(fn($c) => ['nombre' => $c->nombre, 'votos' => (int)($c->total_votos ?? 0)])->toArray()) !!};
         
+        // =========================================================================
+        // 1. PROCESAMIENTO DE DATOS Y RENDERIZADO DEL GRÁFICO
+        // =========================================================================
+        const candidatosCard = {!! json_encode($candidatosOrdenados->map(fn($c) => ['nombre' => $c->nombre, 'votos' => (int)($c->total_votos ?? 0)])->toArray()) !!};
         const totalVotos = candidatosCard.reduce((a, b) => a + b.votos, 0);
         
         let labelsGrafico = [];
         let datosGrafico = [];
         let coloresGrafico = [];
 
-        // CONDICIÓN: Si no hay votos, mostramos un anillo gris limpio de espera
         if (totalVotos === 0) {
             labelsGrafico = ['Sin votos registrados'];
             datosGrafico = [1];
             coloresGrafico = [document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'];
         } else {
-            // Si hay votos, procesamos el Top de forma inteligente (Máximo 4 + "Otros")
             const maxVisibles = 4;
-            
             if (candidatosCard.length <= maxVisibles + 1) {
                 labelsGrafico = candidatosCard.map(c => c.nombre);
                 datosGrafico = candidatosCard.map(c => c.votos);
             } else {
-                // Tomamos los primeros 4
                 const topCandidatos = candidatosCard.slice(0, maxVisibles);
                 labelsGrafico = topCandidatos.map(c => c.nombre);
                 datosGrafico = topCandidatos.map(c => c.votos);
                 
-                // Agrupamos el resto del arreglo en la categoría "Otros"
                 const resto = candidatosCard.slice(maxVisibles);
                 const votosResto = resto.reduce((a, b) => a + b.votos, 0);
                 
@@ -398,19 +395,10 @@
                     datosGrafico.push(votosResto);
                 }
             }
-
-            // Paleta de colores profesionales fijos para el escrutinio activo
-            coloresGrafico = [
-                '#4F46E5', // 1er Lugar (Indigo)
-                '#10B981', // 2do Lugar (Esmeralda)
-                '#F59E0B', // 3er Lugar (Ámbar)
-                '#EF4444', // 4to Lugar (Rojo)
-                '#6B7280'  // Resto / Otros (Gris)
-            ];
+            coloresGrafico = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#6B7280'];
         }
 
         const ctx = document.getElementById('graficoLideres').getContext('2d');
-        
         new Chart(ctx, {
             type: 'doughnut',
             data: {
@@ -428,7 +416,7 @@
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        display: totalVotos > 0, // Oculta las leyendas si está en cero para que no sature
+                        display: totalVotos > 0,
                         labels: {
                             boxWidth: 10,
                             font: { size: 10, weight: '600' },
@@ -448,13 +436,50 @@
                 cutout: '70%'
             }
         });
-    });
-    </script>
 
-    {{-- Auto-recarga automática cada 30 segundos --}}
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() { window.location.reload(); }, 30000); 
-        });
+        // =========================================================================
+        // 2. LÓGICA DE AUTO-RECARGA INTELIGENTE (CORREGIDA PARA PRODUCCIÓN)
+        // =========================================================================
+        const actasActualesEnPantalla = {{ (int)$totalActas }}; 
+        const INTERVALO_RECARGA = 30000; // 30 segundos
+
+        function verificarNuevosIngresos() {
+            const urlVerificacion = new URL(window.location.href);
+            
+            // CORRECCIÓN 1: .set() evita la duplicación infinita de parámetros en la URL
+            urlVerificacion.searchParams.set('solo_verificar_cambios', '1');
+            
+            // CORRECCIÓN 2: Forzar la consistencia de la dignidad consultada en segundo plano
+            urlVerificacion.searchParams.set('dignidad', '{{ $dignidadSeleccionada }}');
+            
+            fetch(urlVerificacion.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && typeof data.total_actas !== 'undefined') {
+                    const totalActasServidor = parseInt(data.total_actas);
+                    
+                    // Si el conteo del servidor difiere de lo desplegado en la pantalla, actualizamos
+                    if (totalActasServidor !== actasActualesEnPantalla) {
+                        window.location.reload();
+                    } else {
+                        setTimeout(verificarNuevosIngresos, INTERVALO_RECARGA);
+                    }
+                } else {
+                    setTimeout(verificarNuevosIngresos, INTERVALO_RECARGA);
+                }
+            })
+            .catch(error => {
+                console.error("Error en la consulta ligera de actas:", error);
+                setTimeout(verificarNuevosIngresos, INTERVALO_RECARGA);
+            });
+        }
+
+        // Inicializar el ciclo de monitoreo
+        setTimeout(verificarNuevosIngresos, INTERVALO_RECARGA);
+    });
     </script>
 </x-app-layout>
